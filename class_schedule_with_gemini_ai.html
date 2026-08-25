@@ -1,0 +1,2035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Schedule with AI Auto-Import</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+    <style>
+        :root {
+            --header-bg: #4A302D;
+            --time-bg: #BA7F5F;
+            --grid-bg: #E2F5D6;
+            --class-bg: rgba(1, 95, 67, 1);
+            --grid-line: rgba(0, 128, 0, 0.15);
+            --header-text-color: #ffffff;
+            --time-text-color: #ffffff;
+            --class-text-color: rgba(255, 255, 255, 1);
+            --main-font: Arial, sans-serif;
+        }
+
+        body {
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .main-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 1350px;
+            margin: 0 auto;
+        }
+
+        @media (min-width: 1024px) {
+            .main-layout {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+        }
+
+        .controls-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            min-width: 300px;
+            transition: width 0.3s ease, min-width 0.3s ease;
+        }
+
+        .controls-panel.collapsed {
+            min-width: 0;
+        }
+
+        @media (min-width: 1024px) {
+            .controls-panel {
+                width: 360px;
+                position: sticky;
+                top: 20px;
+            }
+            
+            .controls-panel.collapsed {
+                width: 76px;
+            }
+            
+            .controls-panel.collapsed .panel-title {
+                display: none;
+            }
+        }
+
+        .controls-panel.collapsed .controls-content {
+            display: none;
+        }
+        
+        .controls-panel.collapsed .panel-header {
+            margin-bottom: 0 !important;
+        }
+
+        .toggle-panel-btn {
+            transition: transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .controls-panel.collapsed .toggle-panel-btn {
+            transform: rotate(180deg);
+        }
+
+        .schedule-container {
+            font-family: var(--main-font);
+            flex-grow: 1;
+            width: 100%;
+            background-color: var(--grid-bg);
+            background-image: var(--schedule-bg-image, none);
+            background-size: var(--schedule-bg-size, cover);
+            background-repeat: var(--schedule-bg-repeat, no-repeat);
+            background-position: center;
+            border: 1px solid #ccc;
+            overflow-x: auto;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: 60px repeat(6, minmax(110px, 1fr));
+            grid-template-rows: 32px repeat(30, 24px);
+            position: relative;
+            min-width: 720px;
+        }
+
+        .cell {
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-cell {
+            background-color: var(--header-bg);
+            color: var(--header-text-color);
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid rgba(255, 255, 255, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-size: 0.85rem;
+        }
+
+        .time-cell {
+            background-color: var(--time-bg);
+            color: var(--time-text-color);
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+            border-right: 1px solid rgba(255, 255, 255, 0.3);
+            grid-column: 1;
+            grid-row-end: span 2;
+            font-size: 0.75rem;
+        }
+
+        .bg-lines {
+            grid-column: 2 / -1;
+            grid-row: 2 / -1;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .horizontal-line {
+            height: 24px;
+            border-bottom: 1px solid var(--grid-line);
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .horizontal-line:nth-child(even) {
+            border-bottom: 2px solid var(--grid-line);
+        }
+        
+        .vertical-lines-container {
+             grid-column: 2 / -1;
+             grid-row: 2 / -1;
+             display: grid;
+             grid-template-columns: repeat(6, 1fr);
+             pointer-events: none;
+             z-index: 0;
+        }
+
+        .vertical-line {
+             border-right: 1px solid var(--grid-line);
+             height: 100%;
+        }
+
+        .class-block-wrapper {
+            position: relative;
+            z-index: 5;
+            transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.2s, padding 0.2s ease, background-color 0.2s ease;
+            cursor: grab;
+            touch-action: none;
+            box-sizing: border-box;
+            background-color: transparent;
+            padding: 0px; 
+            overflow: hidden;
+        }
+
+        .class-block-wrapper:hover {
+            z-index: 20;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        }
+
+        .class-block-wrapper.dragging {
+            cursor: grabbing;
+            z-index: 100 !important;
+            filter: drop-shadow(0 12px 20px rgba(0,0,0,0.4));
+            opacity: 0.75;
+        }
+
+        .class-block-wrapper.just-added {
+            animation: pulseHighlight 1.5s ease-out;
+        }
+
+        @keyframes pulseHighlight {
+            0% { transform: scale(1.08); filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.9)); }
+            50% { transform: scale(1.04); }
+            100% { transform: scale(1); }
+        }
+
+        .class-block-inner {
+            background-color: var(--class-bg);
+            background-image: var(--class-bg-image, none);
+            background-size: var(--specific-bg-size, var(--class-bg-size, cover));
+            background-repeat: var(--specific-bg-repeat, var(--class-bg-repeat, no-repeat));
+            background-position: center;
+            color: var(--class-text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 3px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            box-sizing: border-box;
+            line-height: 1.2;
+            width: 100%;
+            height: 100%;
+            transition: clip-path 0.2s ease, padding 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .class-block-inner span {
+             display: block;
+        }
+
+        [contenteditable="true"] {
+            outline: none;
+            transition: background-color 0.2s;
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+        [contenteditable="true"]:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            cursor: text;
+        }
+        [contenteditable="true"]:focus {
+            background-color: rgba(255, 255, 255, 0.25);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+        }
+
+        .drop-indicator {
+            background-color: rgba(255, 255, 255, 0.65);
+            box-shadow: inset 0 0 20px rgba(255, 255, 255, 1);
+            border-radius: 6px;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease, grid-column 0.1s, grid-row 0.1s;
+        }
+        
+        .drop-indicator.active {
+            opacity: 1;
+        }
+
+        .checkered-bg {
+            background-color: #eee;
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc),
+                              linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-layout">
+        
+        <div class="controls-panel" id="controlsPanel">
+            <div class="flex items-center mb-4 panel-header">
+                <h2 class="text-xl font-bold mb-0 text-gray-800 panel-title">Manage Schedule</h2>
+                <button id="togglePanelBtn" class="ml-auto p-2 bg-gray-200 rounded hover:bg-gray-300 text-gray-700 toggle-panel-btn transition-colors" title="Toggle Panel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z"></path></svg>
+                </button>
+            </div>
+            
+            <div class="controls-content" id="controlsContent">
+
+                <div class="accordion-section mb-4 bg-purple-50 rounded-lg border border-purple-200 overflow-hidden shadow-sm">
+                    <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-purple-100 hover:bg-purple-200 transition-colors">
+                        <span class="font-bold text-purple-900 text-sm uppercase flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            ✨ AI Auto-Import (Gemini)
+                        </span>
+                        <svg class="chevron w-4 h-4 text-purple-600 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="section-content p-4 pt-3 border-t border-purple-200">
+                        <p class="text-xs text-purple-900 mb-3 leading-relaxed">Upload an image of your schedule or timetable, and Gemini AI will extract and place all classes into your grid automatically!</p>
+                        
+                        <!-- Gemini API Key Input -->
+                        <div class="mb-3">
+                            <div class="flex justify-between items-center mb-1">
+                                <label for="geminiApiKey" class="block text-xs font-semibold text-gray-700">Gemini API Key</label>
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-[11px] text-purple-700 hover:underline font-medium">Get Free Key ↗</a>
+                            </div>
+                            <div class="relative">
+                                <input type="password" id="geminiApiKey" class="w-full border rounded px-2 py-1.5 text-xs focus:ring-2 focus:ring-purple-500 outline-none pr-8 bg-white" placeholder="AIzaSy...">
+                                <button type="button" id="toggleKeyVisibility" class="absolute right-2 top-1.5 text-gray-400 hover:text-gray-600 text-xs" title="Show/Hide Key">👁️</button>
+                            </div>
+                        </div>
+
+                        <!-- Schedule Image File Upload -->
+                        <div class="mb-3">
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Upload Schedule Image</label>
+                            <input type="file" id="geminiImageInput" accept="image/png, image/jpeg, image/webp" class="text-xs w-full file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-purple-200 file:text-purple-800 hover:file:bg-purple-300 cursor-pointer bg-white border rounded">
+                        </div>
+
+                        <!-- Image Preview Box -->
+                        <div id="aiImagePreviewContainer" class="mb-3 hidden">
+                            <p class="text-[11px] text-gray-500 mb-1 font-semibold">Image Preview:</p>
+                            <div class="w-full h-32 rounded border border-purple-200 overflow-hidden bg-gray-50 flex items-center justify-center">
+                                <img id="aiImagePreview" src="" class="max-h-full max-w-full object-contain" alt="Schedule Preview">
+                            </div>
+                        </div>
+
+                        <!-- Import Mode -->
+                        <div class="mb-3">
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Import Mode</label>
+                            <div class="flex gap-4 text-xs text-gray-700">
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="aiImportMode" value="replace" checked class="accent-purple-600">
+                                    Replace current
+                                </label>
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="aiImportMode" value="append" class="accent-purple-600">
+                                    Merge / Append
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="button" id="aiExtractBtn" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2 px-4 rounded text-xs transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50">
+                            <svg id="aiBtnIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span id="aiBtnText">Extract & Load Schedule</span>
+                        </button>
+
+                        <p id="aiStatusMsg" class="text-xs mt-2 hidden font-medium p-2 rounded"></p>
+                    </div>
+                </div>
+                
+                <div class="accordion-section mb-4 bg-green-50 rounded border border-green-200 overflow-hidden shadow-sm">
+                    <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-green-100 hover:bg-green-200 transition-colors">
+                        <span class="font-semibold text-green-800 text-sm uppercase">Save / Export</span>
+                        <svg class="chevron w-4 h-4 text-green-600 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="section-content p-4 pt-3 border-t border-green-200 hidden">
+                        <p class="text-[11px] text-green-800 mb-3 leading-tight">Export your schedule data to your computer, and load it back anytime.</p>
+                        <button id="exportBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-sm transition mb-2">
+                            Export to File (.json)
+                        </button>
+                        <div class="relative w-full mb-4">
+                            <input type="file" id="importInput" accept=".json" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <button type="button" class="w-full bg-white border border-green-600 text-green-700 hover:bg-green-50 font-bold py-2 px-4 rounded text-sm transition pointer-events-none">
+                                Import from File
+                            </button>
+                        </div>
+
+                        <!-- PNG Export Section -->
+                        <div class="border-t border-green-200 pt-4">
+                            <p class="text-[11px] text-green-800 mb-3 leading-tight">Download a picture of your current schedule grid.</p>
+                            <button id="exportPngBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded text-sm transition flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                Export as PNG Image
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-section mb-4 bg-gray-50 rounded border border-gray-200 overflow-hidden shadow-sm">
+                    <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-gray-100 hover:bg-gray-200 transition-colors">
+                        <span class="font-semibold text-gray-700 text-sm uppercase">Add New Class</span>
+                        <svg class="chevron w-4 h-4 text-gray-500 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="section-content p-4 pt-3 border-t border-gray-200">
+                        
+                        <div class="flex rounded-md bg-gray-200 p-1 mb-4">
+                            <button type="button" id="tabFixedTime" class="flex-1 py-1 text-xs font-semibold rounded bg-white text-gray-800 shadow-sm transition-all">
+                                Fixed Time
+                            </button>
+                            <button type="button" id="tabAutoDuration" class="flex-1 py-1 text-xs font-semibold rounded text-gray-600 hover:text-gray-800 transition-all">
+                                Duration
+                            </button>
+                        </div>
+
+                        <form id="addClassForm">
+                            <div class="mb-3">
+                                <label class="block text-xs text-gray-600 mb-1">Subject Name</label>
+                                <input type="text" id="subjectName" required class="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-green-500 outline-none" placeholder="e.g. DEVC 70">
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-xs text-gray-600 mb-1">Room / Location</label>
+                                <input type="text" id="roomName" class="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-green-500 outline-none" placeholder="e.g. Room 302">
+                            </div>
+
+                            <div id="fixedTimeContainer">
+                                <div class="mb-3">
+                                    <label class="block text-xs text-gray-600 mb-1">Day</label>
+                                    <select id="classDay" class="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white">
+                                        <option value="Monday">Monday</option>
+                                        <option value="Tuesday">Tuesday</option>
+                                        <option value="Wednesday">Wednesday</option>
+                                        <option value="Thursday">Thursday</option>
+                                        <option value="Friday">Friday</option>
+                                        <option value="Saturday">Saturday</option>
+                                    </select>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 mb-4">
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">Start Time</label>
+                                        <input type="time" id="startTime" min="07:00" max="21:30" step="1800" class="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">End Time</label>
+                                        <input type="time" id="endTime" min="07:30" max="22:00" step="1800" class="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="durationContainer" class="hidden">
+                                <div class="mb-3">
+                                    <label class="block text-xs text-gray-600 mb-1">Class Duration</label>
+                                    <select id="classDuration" class="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white">
+                                        <option value="30">30 minutes (0.5 hrs)</option>
+                                        <option value="60" selected>1 hour (60 mins)</option>
+                                        <option value="90">1.5 hours (90 mins)</option>
+                                        <option value="120">2 hours (120 mins)</option>
+                                        <option value="150">2.5 hours (150 mins)</option>
+                                        <option value="180">3 hours (180 mins)</option>
+                                        <option value="210">3.5 hours (210 mins)</option>
+                                        <option value="240">4 hours (240 mins)</option>
+                                    </select>
+                                </div>
+                                <div class="mb-4">
+                                    <p class="text-[10px] text-gray-500 mt-1 leading-tight">Class will auto-insert into the earliest available slot starting or ending on :00 or :30 across all days.</p>
+                                </div>
+                            </div>
+
+                            <button type="submit" id="addClassSubmitBtn" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded text-sm transition">
+                                Add Class
+                            </button>
+                            <p id="formError" class="text-red-600 text-xs mt-2 hidden font-medium"></p>
+                            <p id="formSuccess" class="text-emerald-700 text-xs mt-2 hidden font-medium bg-emerald-50 p-2 rounded border border-emerald-200"></p>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="accordion-section mb-4 bg-gray-50 rounded border border-gray-200 overflow-hidden shadow-sm">
+                    <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-gray-100 hover:bg-gray-200 transition-colors">
+                        <span class="font-semibold text-gray-700 text-sm uppercase">Customize Appearance</span>
+                        <svg class="chevron w-4 h-4 text-gray-500 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="section-content p-4 pt-3 border-t border-gray-200 hidden">
+                        <!-- Schedule Background -->
+                        <div class="mb-3">
+                            <label class="block text-xs text-gray-600 mb-1">Schedule Background</label>
+                            <select id="globalScheduleBgType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-green-500 outline-none mb-2 bg-white">
+                                <option value="default">Default</option>
+                                <option value="color">Solid Color</option>
+                                <option value="image">Custom Image</option>
+                            </select>
+                            <div id="globalScheduleBgColorContainer" class="hidden">
+                                <input type="color" id="globalScheduleBgColor" value="#E2F5D6" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                            </div>
+                            <div id="globalScheduleBgImageContainer" class="hidden">
+                                <input type="file" id="scheduleBgInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-200 hover:file:bg-gray-300 cursor-pointer">
+                                <button type="button" id="clearScheduleBg" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Background</button>
+                            </div>
+                        </div>
+
+                        <!-- Class Block Background -->
+                        <div class="mb-3">
+                            <label class="block text-xs text-gray-600 mb-1">Class Block Background</label>
+                            <select id="globalClassBgType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-green-500 outline-none mb-2 bg-white">
+                                <option value="default">Default</option>
+                                <option value="color">Solid Color</option>
+                                <option value="image">Custom Image</option>
+                            </select>
+                            <div id="globalClassBgColorContainer" class="hidden">
+                                <div class="flex items-center gap-3 bg-white border border-gray-300 rounded p-1.5 shadow-sm mb-1">
+                                    <input type="color" id="globalClassBgColor" value="#015F43" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm" title="Pick Color">
+                                    <div class="flex-1 flex flex-col pr-2">
+                                        <div class="flex justify-between items-center mb-1.5">
+                                            <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Opacity</span>
+                                            <span id="globalClassBgOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">100%</span>
+                                        </div>
+                                        <input type="range" id="globalClassBgOpacity" min="0" max="100" value="100" class="w-full accent-green-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="globalClassBgImageContainer" class="hidden">
+                                <input type="file" id="classBgInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-200 hover:file:bg-gray-300 cursor-pointer">
+                                <button type="button" id="clearClassBg" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Class Background</button>
+                            </div>
+                        </div>
+
+                        <!-- Class Block Border -->
+                        <div class="mb-3 border-t pt-3 mt-3 border-gray-200">
+                            <label class="block text-xs text-gray-600 mb-1">Class Block Border</label>
+                            <select id="globalClassBorderType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-green-500 outline-none mb-2 bg-white">
+                                <option value="default">Default</option>
+                                <option value="color">Solid Color</option>
+                                <option value="image">Custom Image</option>
+                            </select>
+                            <div id="globalClassBorderColorContainer" class="hidden">
+                                <input type="color" id="globalClassBorderColor" value="#ffffff" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                            </div>
+                            <div id="globalClassBorderImageContainer" class="hidden">
+                                <input type="file" id="classBorderInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-200 hover:file:bg-gray-300 cursor-pointer">
+                                <button type="button" id="clearClassBorder" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Border</button>
+                            </div>
+                            <p class="text-[10px] text-gray-500 mt-1 leading-tight">Colors and image borders neatly trace diagonal cut shapes.</p>
+                        </div>
+
+                        <!-- Grid Lines Color & Opacity -->
+                        <div class="mb-3">
+                            <label class="block text-xs text-gray-600 mb-1">Grid Lines Appearance</label>
+                            <div class="flex items-center gap-3 bg-white border border-gray-300 rounded p-1.5 shadow-sm">
+                                <input type="color" id="gridLinesColor" value="#008000" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm">
+                                <div class="flex-1 flex flex-col pr-2">
+                                    <div class="flex justify-between items-center mb-1.5">
+                                        <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Opacity</span>
+                                        <span id="gridLinesOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">20%</span>
+                                    </div>
+                                    <input type="range" id="gridLinesOpacity" min="0" max="100" value="20" class="w-full accent-green-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Labels & Typography -->
+                        <div class="mb-3 border-t pt-3 mt-3 border-gray-200">
+                            <h4 class="font-semibold text-gray-700 mb-2 text-xs uppercase">Typography & Labels</h4>
+                            
+                            <div class="mb-2">
+                                <label class="block text-xs text-gray-600 mb-1">Global Font</label>
+                                <select id="globalFont" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-green-500 outline-none bg-white">
+                                    <option value="Arial, sans-serif">Arial / Sans-serif</option>
+                                    <option value="'Times New Roman', serif">Times New Roman / Serif</option>
+                                    <option value="'Courier New', monospace">Courier New / Monospace</option>
+                                    <option value="Georgia, serif">Georgia</option>
+                                    <option value="Verdana, sans-serif">Verdana</option>
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 mb-2">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Day Header BG</label>
+                                    <input type="color" id="headerBgColor" value="#4A302D" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Day Text Color</label>
+                                    <input type="color" id="headerTextColor" value="#ffffff" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-2 mb-2">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Time Label BG</label>
+                                    <input type="color" id="timeBgColor" value="#BA7F5F" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">Time Text Color</label>
+                                    <input type="color" id="timeTextColor" value="#ffffff" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="block text-xs text-gray-600 mb-1">Global Class Text Color</label>
+                                <div class="flex items-center gap-3 bg-white border border-gray-300 rounded p-1.5 shadow-sm">
+                                    <input type="color" id="globalClassTextColor" value="#ffffff" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm">
+                                    <div class="flex-1 flex flex-col pr-2">
+                                        <div class="flex justify-between items-center mb-1.5">
+                                            <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Opacity</span>
+                                            <span id="globalClassTextOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">100%</span>
+                                        </div>
+                                        <input type="range" id="globalClassTextOpacity" min="0" max="100" value="100" class="w-full accent-green-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-section mb-2 bg-gray-50 rounded border border-gray-200 overflow-hidden shadow-sm">
+                    <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-gray-100 hover:bg-gray-200 transition-colors">
+                        <span class="font-semibold text-gray-700 text-sm uppercase flex items-center">
+                            Current Classes
+                            <span id="classCount" class="ml-2 bg-gray-300 text-gray-800 px-2 py-0.5 rounded-full text-xs font-bold">0</span>
+                        </span>
+                        <svg class="chevron w-4 h-4 text-gray-500 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div class="section-content p-3 border-t border-gray-200">
+                        <ul id="classList" class="space-y-2 max-h-80 overflow-y-auto pr-2">
+                            <!-- Class list items injected by JS -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="schedule-container" id="scheduleWrapper">
+            <div class="schedule-grid" id="gridContainer">
+                
+                <!-- Headers -->
+                <div class="header-cell" contenteditable="true" title="Click to edit text">Time</div>
+                <div class="header-cell" contenteditable="true" title="Click to edit text">Monday</div>
+                <div class="header-cell" contenteditable="true" title="Click to edit text">Tuesday</div>
+                <div class="header-cell" contenteditable="true" title="Click to edit text">Wednesday</div>
+                <div class="header-cell" contenteditable="true" title="Click to edit text">Thursday</div>
+                <div class="header-cell" contenteditable="true" title="Click to edit text">Friday</div>
+                <div class="header-cell" contenteditable="true" title="Click to edit text">Saturday</div>
+
+                <!-- Time Column (Rows 2 to 31) -->
+                <div class="time-cell" style="grid-row: 2 / span 2;" contenteditable="true" title="Click to edit text">7-8</div>
+                <div class="time-cell" style="grid-row: 4 / span 2;" contenteditable="true" title="Click to edit text">8-9</div>
+                <div class="time-cell" style="grid-row: 6 / span 2;" contenteditable="true" title="Click to edit text">9-10</div>
+                <div class="time-cell" style="grid-row: 8 / span 2;" contenteditable="true" title="Click to edit text">10-11</div>
+                <div class="time-cell" style="grid-row: 10 / span 2;" contenteditable="true" title="Click to edit text">11-12</div>
+                <div class="time-cell" style="grid-row: 12 / span 2;" contenteditable="true" title="Click to edit text">12-1</div>
+                <div class="time-cell" style="grid-row: 14 / span 2;" contenteditable="true" title="Click to edit text">1-2</div>
+                <div class="time-cell" style="grid-row: 16 / span 2;" contenteditable="true" title="Click to edit text">2-3</div>
+                <div class="time-cell" style="grid-row: 18 / span 2;" contenteditable="true" title="Click to edit text">3-4</div>
+                <div class="time-cell" style="grid-row: 20 / span 2;" contenteditable="true" title="Click to edit text">4-5</div>
+                <div class="time-cell" style="grid-row: 22 / span 2;" contenteditable="true" title="Click to edit text">5-6</div>
+                <div class="time-cell" style="grid-row: 24 / span 2;" contenteditable="true" title="Click to edit text">6-7</div>
+                <div class="time-cell" style="grid-row: 26 / span 2;" contenteditable="true" title="Click to edit text">7-8</div>
+                <div class="time-cell" style="grid-row: 28 / span 2;" contenteditable="true" title="Click to edit text">8-9</div>
+                <div class="time-cell" style="grid-row: 30 / span 2;" contenteditable="true" title="Click to edit text">9-10</div>
+
+                <!-- Grid Lines Base -->
+                <div class="bg-lines" id="bgLines"></div>
+                <div class="vertical-lines-container" id="vertLines"></div>
+
+                <!-- Drop Highlight Indicator -->
+                <div id="dropIndicator" class="drop-indicator"></div>
+
+                <!-- Class blocks will be dynamically injected here by JS -->
+            </div>
+        </div>
+    </div>
+
+    <div id="editClassPanel" class="fixed z-[100] bg-white rounded-xl border border-blue-200 shadow-2xl p-4 w-80 max-w-[90vw] hidden transition-opacity duration-150">
+        <div class="flex justify-between items-center pb-2 mb-3 border-b border-gray-200">
+            <h3 id="editingClassLabel" class="text-xs font-bold text-blue-900 uppercase truncate pr-2">Edit Block</h3>
+            <button type="button" id="closeEditPanel" class="text-gray-400 hover:text-gray-700 text-xl leading-none font-bold" title="Close Panel">&times;</button>
+        </div>
+        
+        <div class="max-h-[70vh] overflow-y-auto pr-1">
+            <!-- Text Content -->
+            <div class="mb-3">
+                <label class="block text-xs text-gray-600 mb-1">Subject Name</label>
+                <input type="text" id="editSubjectName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
+                
+                <label class="block text-xs text-gray-600 mb-1">Room / Location</label>
+                <input type="text" id="editRoomName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
+            </div>
+
+            <!-- Background Appearance -->
+            <div class="mb-3">
+                <label class="block text-xs text-gray-600 mb-1">Text Color (This Class Only)</label>
+                <div class="flex items-center gap-3 bg-gray-50 border border-gray-300 rounded p-1.5 mb-3 shadow-sm">
+                    <input type="color" id="editTextColor" value="#ffffff" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm">
+                    <div class="flex-1 flex flex-col pr-2">
+                        <div class="flex justify-between items-center mb-1.5">
+                            <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Opacity</span>
+                            <span id="editClassTextOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">100%</span>
+                        </div>
+                        <input type="range" id="editClassTextOpacity" min="0" max="100" value="100" class="w-full accent-blue-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
+                    </div>
+                </div>
+
+                <label class="block text-xs text-gray-600 mb-1 mt-2 border-t border-gray-100 pt-2">Background Appearance</label>
+                <select id="editBgType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
+                    <option value="default">Default</option>
+                    <option value="color">Solid Color</option>
+                    <option value="image">Custom Image</option>
+                </select>
+
+                <div id="editBgColorContainer" class="hidden">
+                    <div class="flex items-center gap-3 bg-gray-50 border border-gray-300 rounded p-1.5 mb-2 shadow-sm">
+                        <input type="color" id="editBgColor" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm">
+                        <div class="flex-1 flex flex-col pr-2">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Opacity</span>
+                                <span id="editClassBgOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">100%</span>
+                            </div>
+                            <input type="range" id="editClassBgOpacity" min="0" max="100" value="100" class="w-full accent-blue-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="editBgImageContainer" class="hidden">
+                    <input type="file" id="editClassBgInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-200 hover:file:bg-blue-300 cursor-pointer">
+                    <button type="button" id="clearEditClassBg" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Background</button>
+                </div>
+            </div>
+
+            <!-- Border Appearance -->
+            <div class="mb-3 border-t border-gray-100 pt-3">
+                <label class="block text-xs text-gray-600 mb-1">Border Appearance</label>
+                <select id="editBorderType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
+                    <option value="default">Default</option>
+                    <option value="color">Solid Color</option>
+                    <option value="image">Custom Image</option>
+                </select>
+
+                <div id="editBorderColorContainer" class="hidden">
+                    <input type="color" id="editBorderColor" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                </div>
+
+                <div id="editBorderImageContainer" class="hidden">
+                    <input type="file" id="editClassBorderInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-200 hover:file:bg-blue-300 cursor-pointer">
+                    <button type="button" id="clearEditClassBorder" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Border</button>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-1 leading-tight">Colors and image borders neatly trace diagonal cut shapes.</p>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="mt-4 pt-3 border-t border-gray-200 flex justify-between items-center">
+                <button type="button" id="duplicateClassBtn" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-1.5 px-3 rounded transition-colors flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M216,40H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V48A8,8,0,0,0,216,40Zm-56,168H48V96H160Zm48-48H176V96a8,8,0,0,0-8-8H96V56H208Z"></path></svg>
+                    Duplicate
+                </button>
+                <button type="button" id="deleteEditClassBtn" class="text-xs bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-1.5 px-3 rounded transition-colors flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"></path></svg>
+                    Remove Class
+                </button>
+            </div>
+            <p id="editPanelError" class="text-red-600 text-xs mt-2 hidden font-medium text-center"></p>
+        </div>
+    </div>
+
+    <div id="imageEditorModal" class="hidden fixed inset-0 z-[1000] bg-black bg-opacity-75 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-5 w-full max-w-md flex flex-col gap-4 shadow-xl">
+            <h3 class="text-lg font-bold text-gray-800 border-b pb-2">Adjust Image</h3>
+            
+            <div class="w-full h-48 rounded relative overflow-hidden flex items-center justify-center checkered-bg border border-gray-300">
+                <img id="imagePreview" src="" class="w-full h-full object-cover transition-all" alt="Preview">
+            </div>
+            
+            <div class="flex flex-col gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1 flex justify-between">
+                        <span>Brightness</span>
+                        <span id="brightnessVal" class="text-blue-600">100%</span>
+                    </label>
+                    <input type="range" id="brightnessSlider" min="10" max="200" value="100" class="w-full accent-blue-600 cursor-pointer">
+                </div>
+                
+                <div id="fitControlContainer">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Image Fit</label>
+                    <select id="fitSelect" class="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                        <option value="cover">Cover (Fill fully, crops edges)</option>
+                        <option value="contain">Contain (Show whole image)</option>
+                        <option value="100% 100%">Stretch (Distorts to fit)</option>
+                        <option value="auto">Tile (Repeats image)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-2 border-t pt-3 mt-1">
+                <button type="button" id="cancelImgEdit" class="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded transition-colors">Cancel</button>
+                <button type="button" id="applyImgEdit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initial dataset
+        let scheduleData = [
+            { id: 1, subject: 'DEVC 70 ST', room: 'CDC LR1', day: 'Tuesday', start: '08:00', end: '09:00', customClass: null },
+            { id: 2, subject: 'DEVC 103 E-2L', room: 'CDC ANNEX2', day: 'Tuesday', start: '10:00', end: '13:00', customClass: null },
+            { id: 3, subject: 'WIKA 1 X3', room: 'CAS 108', day: 'Tuesday', start: '14:00', end: '16:00', customClass: null },
+            { id: 4, subject: 'DEVC 80 Z2', room: 'DEC-IMU', day: 'Tuesday', start: '17:00', end: '19:00', customClass: null },
+            { id: 5, subject: 'DEVC 101 B', room: 'CDC ANNEX4', day: 'Wednesday', start: '08:30', end: '10:00', customClass: null },
+            { id: 6, subject: 'DEVC 103 E', room: 'CDC LR1', day: 'Wednesday', start: '13:00', end: '14:00', customClass: null },
+            { id: 7, subject: 'COMM 10 DC8', room: 'CDC Annex 03', day: 'Wednesday', start: '16:00', end: '17:30', customClass: null },
+            { id: 8, subject: 'DEVC 70 ST', room: 'CDC LR1', day: 'Thursday', start: '08:00', end: '09:00', customClass: null },
+            { id: 9, subject: 'HK 12 TU1', room: 'Ballet Area', day: 'Thursday', start: '09:00', end: '11:00', customClass: null },
+            { id: 10, subject: 'WIKA 1 X3', room: 'CAS 108', day: 'Thursday', start: '14:00', end: '16:00', customClass: null },
+            { id: 11, subject: 'DEVC 80 Z2', room: 'DEC-IMU', day: 'Thursday', start: '17:00', end: '19:00', customClass: null },
+            { id: 12, subject: 'DEVC 101 B', room: 'CDC ANNEX4', day: 'Friday', start: '08:00', end: '10:00', customClass: null },
+            { id: 13, subject: 'DEVC 70 ST3L', room: 'CDC LR2', day: 'Friday', start: '10:00', end: '13:00', customClass: null },
+            { id: 14, subject: 'DEVC 103 E', room: 'CDC LR1', day: 'Friday', start: '13:00', end: '14:00', customClass: null },
+            { id: 15, subject: 'COMM 10 DC8', room: 'CDC Annex 03', day: 'Friday', start: '16:00', end: '17:30', customClass: null },
+        ];
+
+        let globalSettings = {
+            scheduleBgType: 'default', scheduleBgColor: '#E2F5D6', scheduleBgImage: null, scheduleBgFit: 'cover',
+            classBgType: 'default', classBgColor: '#015F43', classBgImage: null, classBgFit: 'cover', classBgOpacity: 1.0,
+            classBorderType: 'default', classBorderColor: '#ffffff', classBorderImage: null,
+            font: 'Arial, sans-serif',
+            headerBgColor: '#4A302D', headerTextColor: '#ffffff',
+            timeBgColor: '#BA7F5F', timeTextColor: '#ffffff',
+            globalClassTextColor: '#ffffff', classTextOpacity: 1.0,
+            gridLinesColor: '#008000',
+            gridLinesOpacity: 0.2,
+            headers: [], times: []
+        };
+
+        const hexToRgba = (hex, opacity) => {
+            if (!hex) return `rgba(0,0,0,${opacity})`;
+            let r = 0, g = 0, b = 0;
+            if (hex.length == 4) {
+                r = "0x" + hex[1] + hex[1]; g = "0x" + hex[2] + hex[2]; b = "0x" + hex[3] + hex[3];
+            } else if (hex.length == 7) {
+                r = "0x" + hex[1] + hex[2]; g = "0x" + hex[3] + hex[4]; b = "0x" + hex[5] + hex[6];
+            }
+            return `rgba(${+r},${+g},${+b},${opacity})`;
+        };
+
+        function saveData() {}
+
+        const dayToColMap = { 'Monday': 2, 'Tuesday': 3, 'Wednesday': 4, 'Thursday': 5, 'Friday': 6, 'Saturday': 7 };
+
+        function timeToRowCoord(timeStr) {
+            const [hoursStr, minutesStr] = timeStr.split(':');
+            let row = ((parseInt(hoursStr, 10) - 7) * 2) + 2;
+            if (parseInt(minutesStr, 10) >= 30) row += 1;
+            return row;
+        }
+
+        function rowCoordToTime(row) {
+            let totalMinutes = (row - 2) * 30;
+            return `${String(7 + Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
+        }
+
+        function formatTime12hr(timeStr) {
+            const [h, m] = timeStr.split(':');
+            let hours = parseInt(h, 10);
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12 || 12;
+            return `${hours}:${m} ${ampm}`;
+        }
+
+        function getClipPathForTime(startStr, endStr) {
+            const startsAt30 = startStr ? startStr.endsWith(':30') : false;
+            const endsAt30 = endStr ? endStr.endsWith(':30') : false;
+
+            if (startsAt30 && endsAt30) {
+                return { clipPath: 'polygon(0 12px, 100% 0, 100% calc(100% - 12px), 0 100%)', paddingTop: '10px', paddingBottom: '10px' };
+            } else if (startsAt30) {
+                return { clipPath: 'polygon(0 12px, 100% 0, 100% 100%, 0 100%)', paddingTop: '10px', paddingBottom: '3px' };
+            } else if (endsAt30) {
+                return { clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 12px), 0 100%)', paddingTop: '3px', paddingBottom: '10px' };
+            } else {
+                return { clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)', paddingTop: '3px', paddingBottom: '3px' };
+            }
+        }
+
+        function findEarliestAvailableSlot(durationMinutes) {
+            const durationRows = Math.round(durationMinutes / 30);
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            
+            const minRow = 2; // Row 2 = 07:00
+            const maxRow = 32; // Row 32 = 22:00
+            
+            for (const day of days) {
+                for (let startRow = minRow; startRow <= maxRow - durationRows; startRow++) {
+                    const endRow = startRow + durationRows;
+                    let isSlotOccupied = false;
+                    for (const item of scheduleData) {
+                        if (item.day !== day) continue;
+                        const itemStartRow = timeToRowCoord(item.start);
+                        const itemEndRow = timeToRowCoord(item.end);
+                        if (startRow < itemEndRow && endRow > itemStartRow) {
+                            isSlotOccupied = true;
+                            break;
+                        }
+                    }
+                    if (!isSlotOccupied) return { day: day, start: rowCoordToTime(startRow), end: rowCoordToTime(endRow) };
+                }
+            }
+            return null;
+        }
+
+        // Load saved API key on startup
+        const savedApiKey = localStorage.getItem('gemini_api_key');
+        if (savedApiKey) {
+            document.getElementById('geminiApiKey').value = savedApiKey;
+        }
+
+        // Toggle API Key Visibility
+        document.getElementById('toggleKeyVisibility').addEventListener('click', function() {
+            const keyInput = document.getElementById('geminiApiKey');
+            if (keyInput.type === 'password') {
+                keyInput.type = 'text';
+                this.innerText = '🙈';
+            } else {
+                keyInput.type = 'password';
+                this.innerText = '👁️';
+            }
+        });
+
+        // Image Preview handler for Gemini upload
+        document.getElementById('geminiImageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const previewContainer = document.getElementById('aiImagePreviewContainer');
+            const previewImg = document.getElementById('aiImagePreview');
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    previewImg.src = evt.target.result;
+                    previewContainer.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewContainer.classList.add('hidden');
+                previewImg.src = '';
+            }
+        });
+
+        // Helper: Convert File to Base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Helper: Round time to nearest 30-minute interval on grid
+        function normalizeToGridTime(timeStr) {
+            if (!timeStr) return "08:00";
+            let parts = timeStr.trim().split(':');
+            let h = parseInt(parts[0], 10);
+            let m = parseInt(parts[1], 10);
+            if (isNaN(h)) h = 8;
+            if (isNaN(m)) m = 0;
+
+            if (m < 15) m = 0;
+            else if (m < 45) m = 30;
+            else { m = 0; h += 1; }
+
+            if (h < 7) h = 7;
+            if (h > 21) h = 21;
+
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        // Helper: Standardize Day Names
+        function normalizeDayName(dayStr) {
+            if (!dayStr) return 'Monday';
+            const d = dayStr.trim().toLowerCase();
+            if (d.includes('mon') || d === 'm') return 'Monday';
+            if (d.includes('tue') || d === 't') return 'Tuesday';
+            if (d.includes('wed') || d === 'w') return 'Wednesday';
+            if (d.includes('thu') || d === 'th') return 'Thursday';
+            if (d.includes('fri') || d === 'f') return 'Friday';
+            if (d.includes('sat') || d === 's') return 'Saturday';
+            return 'Monday';
+        }
+
+        // AI Schedule Extraction Handler
+        document.getElementById('aiExtractBtn').addEventListener('click', async function() {
+            const apiKey = document.getElementById('geminiApiKey').value.trim();
+            const fileInput = document.getElementById('geminiImageInput');
+            const statusMsg = document.getElementById('aiStatusMsg');
+            const btn = this;
+            const btnText = document.getElementById('aiBtnText');
+            const btnIcon = document.getElementById('aiBtnIcon');
+
+            // Save key locally
+            if (apiKey) localStorage.setItem('gemini_api_key', apiKey);
+
+            // Validation
+            if (!apiKey) {
+                statusMsg.className = 'text-xs mt-2 font-medium p-2 rounded bg-red-100 text-red-800 border border-red-200';
+                statusMsg.innerText = 'Please enter a valid Gemini API Key.';
+                statusMsg.classList.remove('hidden');
+                return;
+            }
+
+            if (!fileInput.files || !fileInput.files[0]) {
+                statusMsg.className = 'text-xs mt-2 font-medium p-2 rounded bg-red-100 text-red-800 border border-red-200';
+                statusMsg.innerText = 'Please select a schedule image to upload.';
+                statusMsg.classList.remove('hidden');
+                return;
+            }
+
+            const imageFile = fileInput.files[0];
+
+            // Set Loading UI State
+            btn.disabled = true;
+            btnText.innerText = 'Analyzing Schedule with Gemini...';
+            btnIcon.innerHTML = `<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>`;
+            btnIcon.classList.add('animate-spin');
+
+            statusMsg.className = 'text-xs mt-2 font-medium p-2 rounded bg-purple-100 text-purple-800 border border-purple-200';
+            statusMsg.innerText = 'Sending image to Gemini API...';
+            statusMsg.classList.remove('hidden');
+
+            try {
+                const base64Data = await fileToBase64(imageFile);
+                const mimeType = imageFile.type || 'image/png';
+
+                const promptText = `
+                Examine this class schedule / timetable image and extract all distinct class schedules into a JSON array.
+                For each class slot found, output an object with:
+                - "subject": string (e.g. course code or title, e.g. "DEVC 70" or "MATH 21")
+                - "room": string (e.g. room number or building, e.g. "CDC LR1", or "" if none)
+                - "day": string (must be full day name: "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", or "Saturday")
+                - "start": string (start time in 24-hour HH:MM format between 07:00 and 21:30, e.g. "08:00")
+                - "end": string (end time in 24-hour HH:MM format between 07:30 and 22:00, e.g. "10:00")
+
+                Important Rules:
+                1. If a class occurs on multiple days (e.g., Tuesday & Thursday), return a separate entry for each day.
+                2. Return STRICTLY valid JSON as an array of objects. Do NOT include markdown code blocks or additional explanatory text outside the JSON.
+                `;
+
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+                const requestBody = {
+                    contents: [{
+                        parts: [
+                            { text: promptText },
+                            {
+                                inline_data: {
+                                    mime_type: mimeType,
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        response_mime_type: "application/json"
+                    }
+                };
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error?.message || `HTTP ${response.status} error from Gemini API`);
+                }
+
+                const data = await response.json();
+                const rawResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!rawResponseText) {
+                    throw new Error("No response text received from Gemini API.");
+                }
+
+                // Clean potential Markdown wrap
+                let cleanJsonStr = rawResponseText.trim();
+                if (cleanJsonStr.startsWith('```json')) {
+                    cleanJsonStr = cleanJsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+                } else if (cleanJsonStr.startsWith('```')) {
+                    cleanJsonStr = cleanJsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
+                }
+
+                const extractedClasses = JSON.parse(cleanJsonStr);
+
+                if (!Array.isArray(extractedClasses) || extractedClasses.length === 0) {
+                    throw new Error("Gemini couldn't find any clear class schedules in the image.");
+                }
+
+                // Determine Import Mode
+                const importMode = document.querySelector('input[name="aiImportMode"]:checked').value;
+                if (importMode === 'replace') {
+                    scheduleData = [];
+                }
+
+                let addedCount = 0;
+                extractedClasses.forEach(item => {
+                    const normDay = normalizeDayName(item.day);
+                    let normStart = normalizeToGridTime(item.start);
+                    let normEnd = normalizeToGridTime(item.end);
+
+                    if (normStart >= normEnd) {
+                        // Fix fallback end time (at least 1 hour later)
+                        let startH = parseInt(normStart.split(':')[0], 10);
+                        normEnd = `${String(Math.min(startH + 1, 22)).padStart(2, '0')}:${normStart.split(':')[1]}`;
+                    }
+
+                    const newId = Date.now() + Math.floor(Math.random() * 1000);
+                    scheduleData.push({
+                        id: newId,
+                        subject: item.subject || 'Unnamed Class',
+                        room: item.room || '',
+                        day: normDay,
+                        start: normStart,
+                        end: normEnd
+                    });
+                    addedCount++;
+                });
+
+                renderSchedule();
+                saveData();
+
+                statusMsg.className = 'text-xs mt-2 font-medium p-2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200';
+                statusMsg.innerText = `Success! Successfully loaded ${addedCount} classes into your schedule grid.`;
+
+            } catch (err) {
+                console.error("Gemini API Error:", err);
+                statusMsg.className = 'text-xs mt-2 font-medium p-2 rounded bg-red-100 text-red-800 border border-red-200';
+                statusMsg.innerText = `Extraction failed: ${err.message}`;
+            } finally {
+                btn.disabled = false;
+                btnText.innerText = 'Extract & Load Schedule';
+                btnIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>`;
+                btnIcon.classList.remove('animate-spin');
+            }
+        });
+
+        function applyGlobalSettings() {
+            globalSettings.classBgOpacity = globalSettings.classBgOpacity ?? 1.0;
+            globalSettings.classTextOpacity = globalSettings.classTextOpacity ?? 1.0;
+
+            document.getElementById('globalScheduleBgType').value = globalSettings.scheduleBgType;
+            document.getElementById('globalScheduleBgColor').value = globalSettings.scheduleBgColor;
+            document.getElementById('globalClassBgType').value = globalSettings.classBgType;
+            document.getElementById('globalClassBgColor').value = globalSettings.classBgColor;
+            document.getElementById('globalClassBorderType').value = globalSettings.classBorderType;
+            document.getElementById('globalClassBorderColor').value = globalSettings.classBorderColor;
+            document.getElementById('globalFont').value = globalSettings.font;
+            document.getElementById('headerBgColor').value = globalSettings.headerBgColor;
+            document.getElementById('headerTextColor').value = globalSettings.headerTextColor;
+            document.getElementById('timeBgColor').value = globalSettings.timeBgColor;
+            document.getElementById('timeTextColor').value = globalSettings.timeTextColor;
+            document.getElementById('globalClassTextColor').value = globalSettings.globalClassTextColor;
+            
+            document.getElementById('globalClassBgOpacity').value = Math.round(globalSettings.classBgOpacity * 100);
+            document.getElementById('globalClassBgOpacityVal').innerText = `${Math.round(globalSettings.classBgOpacity * 100)}%`;
+            document.getElementById('globalClassTextOpacity').value = Math.round(globalSettings.classTextOpacity * 100);
+            document.getElementById('globalClassTextOpacityVal').innerText = `${Math.round(globalSettings.classTextOpacity * 100)}%`;
+            
+            document.getElementById('gridLinesColor').value = globalSettings.gridLinesColor;
+            document.getElementById('gridLinesOpacity').value = Math.round(globalSettings.gridLinesOpacity * 100);
+            document.getElementById('gridLinesOpacityVal').innerText = `${Math.round(globalSettings.gridLinesOpacity * 100)}%`;
+
+            document.documentElement.style.setProperty('--main-font', globalSettings.font);
+            document.documentElement.style.setProperty('--header-bg', globalSettings.headerBgColor);
+            document.documentElement.style.setProperty('--header-text-color', globalSettings.headerTextColor);
+            document.documentElement.style.setProperty('--time-bg', globalSettings.timeBgColor);
+            document.documentElement.style.setProperty('--time-text-color', globalSettings.timeTextColor);
+            document.documentElement.style.setProperty('--class-text-color', hexToRgba(globalSettings.globalClassTextColor, globalSettings.classTextOpacity));
+            
+            document.documentElement.style.setProperty('--schedule-bg-size', globalSettings.scheduleBgFit || 'cover');
+            document.documentElement.style.setProperty('--schedule-bg-repeat', (globalSettings.scheduleBgFit === 'auto') ? 'repeat' : 'no-repeat');
+            document.documentElement.style.setProperty('--class-bg-size', globalSettings.classBgFit || 'cover');
+            document.documentElement.style.setProperty('--class-bg-repeat', (globalSettings.classBgFit === 'auto') ? 'repeat' : 'no-repeat');
+
+            toggleGlobalContainers(false);
+
+            const headerCells = document.querySelectorAll('.header-cell');
+            const timeCells = document.querySelectorAll('.time-cell');
+            if (globalSettings.headers && globalSettings.headers.length) {
+                headerCells.forEach((el, i) => { if(globalSettings.headers[i]) el.innerText = globalSettings.headers[i]; });
+            }
+            if (globalSettings.times && globalSettings.times.length) {
+                timeCells.forEach((el, i) => { if(globalSettings.times[i]) el.innerText = globalSettings.times[i]; });
+            }
+        }
+
+        function updateBlockVisuals(id) {
+            const item = scheduleData.find(i => i.id === id);
+            if (!item) return;
+            const wrapper = document.querySelector(`.class-block-wrapper[data-id="${id}"]`);
+            if (!wrapper) return;
+            
+            const inner = wrapper.querySelector('.class-block-inner');
+            const spans = inner.querySelectorAll('span');
+            
+            if (spans.length >= 2) {
+                spans[0].innerText = item.subject;
+                spans[1].innerText = item.room;
+            }
+            wrapper.title = `${item.subject}\n${item.room}\n${item.day}, ${formatTime12hr(item.start)} - ${formatTime12hr(item.end)}`;
+
+            const clipInfo = getClipPathForTime(item.start, item.end);
+            inner.style.paddingTop = clipInfo.paddingTop;
+            inner.style.paddingBottom = clipInfo.paddingBottom;
+            wrapper.style.clipPath = clipInfo.clipPath;
+            inner.style.clipPath = clipInfo.clipPath;
+
+            if (item.bgType === 'color' && item.bgColor) {
+                const bgOp = item.bgOpacity !== undefined ? item.bgOpacity : 1.0;
+                inner.style.backgroundColor = hexToRgba(item.bgColor, bgOp);
+                inner.style.backgroundImage = 'none';
+                inner.style.removeProperty('--specific-bg-size');
+                inner.style.removeProperty('--specific-bg-repeat');
+            } else if ((item.bgType === 'image' || (!item.bgType)) && item.customBg) {
+                inner.style.backgroundColor = 'transparent';
+                inner.style.backgroundImage = `url(${item.customBg})`;
+                const fit = item.customBgFit || 'cover';
+                inner.style.setProperty('--specific-bg-size', fit);
+                inner.style.setProperty('--specific-bg-repeat', fit === 'auto' ? 'repeat' : 'no-repeat');
+            } else {
+                inner.style.backgroundColor = '';
+                inner.style.backgroundImage = '';
+                inner.style.removeProperty('--specific-bg-size');
+                inner.style.removeProperty('--specific-bg-repeat');
+            }
+
+            const effectiveBorderType = item.borderType || 'default';
+            wrapper.style.padding = '0px';
+            wrapper.style.backgroundColor = 'transparent';
+            wrapper.style.backgroundImage = 'none';
+
+            if (effectiveBorderType === 'color') {
+                const color = item.borderColor || globalSettings.classBorderColor;
+                if (color && color !== 'transparent') {
+                    wrapper.style.padding = '2px';
+                    wrapper.style.backgroundColor = color;
+                }
+            } else if (effectiveBorderType === 'image') {
+                const img = item.customBorder || globalSettings.classBorderImage;
+                if (img) {
+                    wrapper.style.padding = '6px';
+                    wrapper.style.backgroundImage = `url(${img})`;
+                    wrapper.style.backgroundSize = 'cover';
+                    wrapper.style.backgroundPosition = 'center';
+                }
+            } else if (effectiveBorderType === 'default') {
+                if (globalSettings.classBorderType === 'color') {
+                    wrapper.style.padding = '2px';
+                    wrapper.style.backgroundColor = globalSettings.classBorderColor;
+                } else if (globalSettings.classBorderType === 'image' && globalSettings.classBorderImage) {
+                    wrapper.style.padding = '6px';
+                    wrapper.style.backgroundImage = `url(${globalSettings.classBorderImage})`;
+                    wrapper.style.backgroundSize = 'cover';
+                    wrapper.style.backgroundPosition = 'center';
+                }
+            }
+
+            if (item.textColor) {
+                const textOp = item.textOpacity !== undefined ? item.textOpacity : 1.0;
+                inner.style.color = hexToRgba(item.textColor, textOp);
+            } else {
+                inner.style.color = '';
+            }
+
+            const sidebarItem = document.querySelector(`button[data-remove-id="${id}"]`)?.previousElementSibling;
+            if (sidebarItem) {
+                sidebarItem.querySelector('.font-bold').innerText = item.subject;
+                sidebarItem.querySelector('.text-xs').innerText = `${item.day} • ${formatTime12hr(item.start)} - ${formatTime12hr(item.end)}`;
+            }
+        }
+
+        function renderSchedule(highlightId = null) {
+            const grid = document.getElementById('gridContainer');
+            grid.querySelectorAll('.class-block-wrapper').forEach(el => el.remove());
+
+            const classListEl = document.getElementById('classList');
+            classListEl.innerHTML = '';
+            document.getElementById('classCount').innerText = scheduleData.length;
+
+            scheduleData.forEach(item => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'class-block-wrapper';
+                if (highlightId && item.id === highlightId) wrapper.classList.add('just-added');
+                
+                const startRow = timeToRowCoord(item.start);
+                const endRow = timeToRowCoord(item.end);
+                const col = dayToColMap[item.day];
+                
+                wrapper.style.gridColumn = col;
+                wrapper.style.gridRow = `${startRow} / span ${endRow - startRow}`;
+                wrapper.setAttribute('data-id', item.id);
+                
+                const inner = document.createElement('div');
+                inner.className = `class-block-inner dynamic-class`;
+                inner.innerHTML = `<span></span><span></span>`;
+                
+                wrapper.appendChild(inner);
+                grid.appendChild(wrapper);
+
+                const li = document.createElement('li');
+                li.className = 'flex justify-between items-center bg-gray-50 border border-gray-200 p-2 rounded text-sm';
+                li.innerHTML = `
+                    <div class="overflow-hidden">
+                        <div class="font-bold text-gray-800 truncate"></div>
+                        <div class="text-xs text-gray-500"></div>
+                    </div>
+                    <button data-remove-id="${item.id}" class="ml-2 text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded" title="Remove Class">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"></path></svg>
+                    </button>
+                `;
+                classListEl.appendChild(li);
+
+                updateBlockVisuals(item.id);
+            });
+        }
+
+        document.querySelectorAll('.toggle-section-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const content = btn.nextElementSibling;
+                const chevron = btn.querySelector('.chevron');
+                content.classList.toggle('hidden');
+                if (chevron) chevron.classList.toggle('rotate-180');
+            });
+        });
+
+        document.getElementById('togglePanelBtn').addEventListener('click', () => {
+            const panel = document.getElementById('controlsPanel');
+            panel.classList.toggle('collapsed');
+        });
+
+        document.getElementById('classList').addEventListener('click', e => {
+            const btn = e.target.closest('button');
+            if (btn && btn.hasAttribute('data-remove-id')) {
+                const id = parseInt(btn.getAttribute('data-remove-id'));
+                scheduleData = scheduleData.filter(item => item.id !== id);
+                renderSchedule();
+                saveData();
+            }
+        });
+
+        let addClassMode = 'fixed'; 
+
+        const tabFixedTime = document.getElementById('tabFixedTime');
+        const tabAutoDuration = document.getElementById('tabAutoDuration');
+        const fixedTimeContainer = document.getElementById('fixedTimeContainer');
+        const durationContainer = document.getElementById('durationContainer');
+        const startTimeInput = document.getElementById('startTime');
+        const endTimeInput = document.getElementById('endTime');
+
+        tabFixedTime.addEventListener('click', () => {
+            addClassMode = 'fixed';
+            tabFixedTime.className = 'flex-1 py-1 text-xs font-semibold rounded bg-white text-gray-800 shadow-sm transition-all';
+            tabAutoDuration.className = 'flex-1 py-1 text-xs font-semibold rounded text-gray-600 hover:text-gray-800 transition-all';
+            fixedTimeContainer.classList.remove('hidden');
+            durationContainer.classList.add('hidden');
+            startTimeInput.required = true;
+            endTimeInput.required = true;
+            document.getElementById('formError').classList.add('hidden');
+            document.getElementById('formSuccess').classList.add('hidden');
+        });
+
+        tabAutoDuration.addEventListener('click', () => {
+            addClassMode = 'duration';
+            tabAutoDuration.className = 'flex-1 py-1 text-xs font-semibold rounded bg-white text-gray-800 shadow-sm transition-all';
+            tabFixedTime.className = 'flex-1 py-1 text-xs font-semibold rounded text-gray-600 hover:text-gray-800 transition-all';
+            durationContainer.classList.remove('hidden');
+            fixedTimeContainer.classList.add('hidden');
+            startTimeInput.required = false;
+            endTimeInput.required = false;
+            document.getElementById('formError').classList.add('hidden');
+            document.getElementById('formSuccess').classList.add('hidden');
+        });
+
+        document.getElementById('addClassForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('formError');
+            const successEl = document.getElementById('formSuccess');
+            errorEl.classList.add('hidden');
+            successEl.classList.add('hidden');
+
+            const subject = document.getElementById('subjectName').value.trim();
+            const room = document.getElementById('roomName').value.trim();
+
+            if (addClassMode === 'fixed') {
+                const day = document.getElementById('classDay').value;
+                const start = startTimeInput.value;
+                const end = endTimeInput.value;
+
+                if (!start || !end) { errorEl.innerText = "Please specify both start and end times."; errorEl.classList.remove('hidden'); return; }
+                if (start >= end) { errorEl.innerText = "End time must be strictly after start time."; errorEl.classList.remove('hidden'); return; }
+
+                const newId = Date.now();
+                scheduleData.push({ id: newId, subject, room, day, start, end });
+
+                renderSchedule(newId);
+                saveData();
+                this.reset();
+                tabFixedTime.click();
+                document.getElementById('subjectName').focus();
+
+            } else if (addClassMode === 'duration') {
+                const durationMins = parseInt(document.getElementById('classDuration').value, 10);
+                const availableSlot = findEarliestAvailableSlot(durationMins);
+
+                if (!availableSlot) {
+                    errorEl.innerText = "No continuous available slot found in the entire schedule for this duration.";
+                    errorEl.classList.remove('hidden'); return;
+                }
+
+                const newId = Date.now();
+                scheduleData.push({
+                    id: newId, subject: subject, room: room,
+                    day: availableSlot.day, start: availableSlot.start, end: availableSlot.end
+                });
+
+                renderSchedule(newId);
+                saveData();
+                successEl.innerText = `Scheduled on ${availableSlot.day} (${formatTime12hr(availableSlot.start)} - ${formatTime12hr(availableSlot.end)})!`;
+                successEl.classList.remove('hidden');
+                this.reset();
+                tabAutoDuration.click();
+                document.getElementById('subjectName').focus();
+            }
+        });
+
+        let isDragging = false, dragHasMoved = false, dragTarget = null, dragId = null;
+        let startX = 0, startY = 0, dragDurationRows = 0;
+
+        function checkDropValidity(colIndex, rowIndex, durationRows, currentDragId) {
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            if (colIndex < 0 || colIndex > 5 || rowIndex < 0 || (rowIndex + durationRows) > 30) return { isValidDrop: false };
+            const newDay = days[colIndex];
+            const newStartRow = rowIndex + 2;
+            const newEndRow = newStartRow + durationRows;
+            
+            for (const other of scheduleData) {
+                if (other.id === currentDragId || other.day !== newDay) continue;
+                if (newStartRow < timeToRowCoord(other.end) && newEndRow > timeToRowCoord(other.start)) {
+                    return { isValidDrop: false };
+                }
+            }
+            return { isValidDrop: true, newDay, newStartRow, newEndRow };
+        }
+
+        const gridContainer = document.getElementById('gridContainer');
+        gridContainer.addEventListener('pointerdown', function(e) {
+            const wrapper = e.target.closest('.class-block-wrapper');
+            if (!wrapper) return; 
+            isDragging = true; dragHasMoved = false; dragTarget = wrapper;
+            dragId = parseInt(wrapper.getAttribute('data-id'));
+            startX = e.clientX; startY = e.clientY;
+            
+            const item = scheduleData.find(i => i.id === dragId);
+            dragDurationRows = timeToRowCoord(item.end) - timeToRowCoord(item.start);
+            
+            wrapper.style.transition = 'none';
+            wrapper.classList.add('dragging');
+            wrapper.setPointerCapture(e.pointerId);
+        });
+
+        gridContainer.addEventListener('pointermove', function(e) {
+            if (!isDragging || !dragTarget) return;
+            const dx = e.clientX - startX, dy = e.clientY - startY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragHasMoved = true;
+            
+            dragTarget.style.transform = `translate(${dx}px, ${dy}px) scale(1.05)`;
+
+            if (dragHasMoved) {
+                const blockRect = dragTarget.getBoundingClientRect();
+                const gridRect = gridContainer.getBoundingClientRect();
+                const relativeX = blockRect.left - gridRect.left + gridContainer.scrollLeft;
+                const relativeY = blockRect.top - gridRect.top + gridContainer.scrollTop;
+                
+                const timeColWidth = gridContainer.querySelector('.time-cell').offsetWidth || 60;
+                const dayColWidth = gridContainer.querySelector('.header-cell:nth-child(2)').offsetWidth || 110;
+                const headerHeight = gridContainer.querySelector('.header-cell').offsetHeight || 32;
+                
+                let colIndex = Math.round((relativeX - timeColWidth) / dayColWidth);
+                let rowIndex = Math.round((relativeY - headerHeight) / 24); 
+                
+                const dropCheck = checkDropValidity(colIndex, rowIndex, dragDurationRows, dragId);
+                const indicator = document.getElementById('dropIndicator');
+                
+                if (dropCheck.isValidDrop) {
+                    indicator.style.gridColumn = colIndex + 2; 
+                    indicator.style.gridRow = `${dropCheck.newStartRow} / span ${dragDurationRows}`;
+                    indicator.classList.add('active');
+                } else {
+                    indicator.classList.remove('active');
+                }
+            }
+        });
+
+        gridContainer.addEventListener('pointerup', function(e) {
+            if (!isDragging || !dragTarget) return;
+            dragTarget.releasePointerCapture(e.pointerId);
+            isDragging = false;
+            dragTarget.classList.remove('dragging');
+            document.getElementById('dropIndicator').classList.remove('active');
+            
+            if (!dragHasMoved) {
+                dragTarget.style.transform = ''; dragTarget.style.transition = '';
+                openEditPanel(dragId);
+                dragTarget = null; return;
+            }
+
+            const blockRect = dragTarget.getBoundingClientRect();
+            const gridRect = gridContainer.getBoundingClientRect();
+            const relativeX = blockRect.left - gridRect.left + gridContainer.scrollLeft;
+            const relativeY = blockRect.top - gridRect.top + gridContainer.scrollTop;
+            
+            const timeColWidth = gridContainer.querySelector('.time-cell').offsetWidth || 60;
+            const dayColWidth = gridContainer.querySelector('.header-cell:nth-child(2)').offsetWidth || 110;
+            const headerHeight = gridContainer.querySelector('.header-cell').offsetHeight || 32;
+            
+            let colIndex = Math.round((relativeX - timeColWidth) / dayColWidth);
+            let rowIndex = Math.round((relativeY - headerHeight) / 24); 
+            
+            const item = scheduleData.find(i => i.id === dragId);
+            const dropCheck = checkDropValidity(colIndex, rowIndex, dragDurationRows, dragId);
+            
+            if (dropCheck.isValidDrop) {
+                item.day = dropCheck.newDay;
+                item.start = rowCoordToTime(dropCheck.newStartRow);
+                item.end = rowCoordToTime(dropCheck.newEndRow);
+                renderSchedule();
+                saveData();
+            } else {
+                dragTarget.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                dragTarget.style.transform = 'translate(0px, 0px) scale(1)';
+                const targetToClean = dragTarget;
+                setTimeout(() => { if (targetToClean) targetToClean.style.transition = ''; }, 400);
+            }
+            dragTarget = null;
+        });
+
+        function toggleGlobalContainers(callSave = true) {
+            const schedType = document.getElementById('globalScheduleBgType').value;
+            globalSettings.scheduleBgType = schedType;
+            document.getElementById('globalScheduleBgColorContainer').classList.toggle('hidden', schedType !== 'color');
+            document.getElementById('globalScheduleBgImageContainer').classList.toggle('hidden', schedType !== 'image');
+            
+            if (schedType === 'default') {
+                document.documentElement.style.setProperty('--grid-bg', '#E2F5D6');
+                document.documentElement.style.removeProperty('--schedule-bg-image');
+            } else if (schedType === 'color') {
+                document.documentElement.style.setProperty('--grid-bg', document.getElementById('globalScheduleBgColor').value);
+                document.documentElement.style.removeProperty('--schedule-bg-image');
+            } else if (schedType === 'image' && globalSettings.scheduleBgImage) {
+                document.documentElement.style.setProperty('--schedule-bg-image', `url(${globalSettings.scheduleBgImage})`);
+                document.documentElement.style.setProperty('--schedule-bg-size', globalSettings.scheduleBgFit || 'cover');
+                document.documentElement.style.setProperty('--schedule-bg-repeat', (globalSettings.scheduleBgFit === 'auto') ? 'repeat' : 'no-repeat');
+            }
+
+            const bgType = document.getElementById('globalClassBgType').value;
+            globalSettings.classBgType = bgType;
+            document.getElementById('globalClassBgColorContainer').classList.toggle('hidden', bgType !== 'color');
+            document.getElementById('globalClassBgImageContainer').classList.toggle('hidden', bgType !== 'image');
+            
+            if (bgType === 'default') {
+                document.documentElement.style.setProperty('--class-bg', hexToRgba('#015F43', globalSettings.classBgOpacity ?? 1));
+                document.documentElement.style.removeProperty('--class-bg-image');
+            } else if (bgType === 'color') {
+                document.documentElement.style.setProperty('--class-bg', hexToRgba(document.getElementById('globalClassBgColor').value, globalSettings.classBgOpacity ?? 1));
+                document.documentElement.style.removeProperty('--class-bg-image');
+            } else if (bgType === 'image' && globalSettings.classBgImage) {
+                document.documentElement.style.setProperty('--class-bg-image', `url(${globalSettings.classBgImage})`);
+                document.documentElement.style.setProperty('--class-bg-size', globalSettings.classBgFit || 'cover');
+                document.documentElement.style.setProperty('--class-bg-repeat', (globalSettings.classBgFit === 'auto') ? 'repeat' : 'no-repeat');
+            }
+
+            const borderType = document.getElementById('globalClassBorderType').value;
+            globalSettings.classBorderType = borderType;
+            document.getElementById('globalClassBorderColorContainer').classList.toggle('hidden', borderType !== 'color');
+            document.getElementById('globalClassBorderImageContainer').classList.toggle('hidden', borderType !== 'image');
+
+            scheduleData.forEach(item => updateBlockVisuals(item.id));
+            if(callSave) saveData();
+        }
+
+        document.getElementById('globalScheduleBgType').addEventListener('change', toggleGlobalContainers);
+        document.getElementById('globalClassBgType').addEventListener('change', toggleGlobalContainers);
+        document.getElementById('globalClassBorderType').addEventListener('change', toggleGlobalContainers);
+
+        document.getElementById('globalScheduleBgColor').addEventListener('input', e => {
+            globalSettings.scheduleBgColor = e.target.value;
+            if (globalSettings.classBgType === 'color') document.documentElement.style.setProperty('--grid-bg', e.target.value);
+            saveData();
+        });
+        
+        document.getElementById('globalClassBgColor').addEventListener('input', e => {
+            globalSettings.classBgColor = e.target.value;
+            if (globalSettings.classBgType === 'color') {
+                document.documentElement.style.setProperty('--class-bg', hexToRgba(e.target.value, globalSettings.classBgOpacity ?? 1));
+            }
+            saveData();
+        });
+
+        document.getElementById('globalClassBgOpacity').addEventListener('input', e => {
+            const opacity = e.target.value / 100;
+            globalSettings.classBgOpacity = opacity;
+            document.getElementById('globalClassBgOpacityVal').innerText = `${e.target.value}%`;
+            toggleGlobalContainers(true);
+        });
+
+        document.getElementById('globalClassBorderColor').addEventListener('input', e => {
+            globalSettings.classBorderColor = e.target.value;
+            scheduleData.forEach(item => updateBlockVisuals(item.id));
+            saveData();
+        });
+
+        let pendingImageCallback = null, pendingImageSrc = null, isEditingBorder = false;
+
+        function openImageEditor(file, isBorder, callback) {
+            isEditingBorder = isBorder;
+            pendingImageCallback = callback;
+            
+            document.getElementById('fitControlContainer').classList.toggle('hidden', isBorder);
+            document.getElementById('brightnessSlider').value = 100;
+            document.getElementById('brightnessVal').innerText = '100%';
+            document.getElementById('fitSelect').value = 'cover';
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                pendingImageSrc = e.target.result;
+                const img = document.getElementById('imagePreview');
+                img.src = pendingImageSrc;
+                img.style.filter = `brightness(100%)`;
+                img.style.objectFit = 'cover';
+                document.getElementById('imageEditorModal').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        document.getElementById('brightnessSlider').addEventListener('input', e => {
+            document.getElementById('brightnessVal').innerText = `${e.target.value}%`;
+            document.getElementById('imagePreview').style.filter = `brightness(${e.target.value}%)`;
+        });
+
+        document.getElementById('fitSelect').addEventListener('change', e => {
+            let fit = e.target.value;
+            const img = document.getElementById('imagePreview');
+            if (fit === 'cover' || fit === 'contain') img.style.objectFit = fit;
+            else if (fit === 'auto') img.style.objectFit = 'none';
+            else img.style.objectFit = 'fill';
+        });
+
+        document.getElementById('cancelImgEdit').addEventListener('click', () => {
+            document.getElementById('imageEditorModal').classList.add('hidden');
+            pendingImageCallback = null;
+        });
+
+        document.getElementById('applyImgEdit').addEventListener('click', () => {
+            const btn = document.getElementById('applyImgEdit');
+            btn.innerText = 'Processing...';
+            btn.disabled = true;
+
+            const brightness = document.getElementById('brightnessSlider').value;
+            const fit = document.getElementById('fitSelect').value;
+            
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width, height = img.height;
+                const MAX = 1200;
+
+                if (width > height) {
+                    if (width > MAX) { height *= MAX / width; width = MAX; }
+                } else {
+                    if (height > MAX) { width *= MAX / height; height = MAX; }
+                }
+                
+                canvas.width = width; canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.filter = `brightness(${brightness}%)`;
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                const format = isEditingBorder ? 'image/png' : 'image/jpeg';
+                const quality = isEditingBorder ? 1.0 : 0.75;
+                const finalDataUrl = canvas.toDataURL(format, quality);
+                
+                document.getElementById('imageEditorModal').classList.add('hidden');
+                btn.innerText = 'Apply'; btn.disabled = false;
+                
+                if (pendingImageCallback) pendingImageCallback(finalDataUrl, fit);
+            };
+            img.src = pendingImageSrc;
+        });
+
+        function setupGlobalImageUpload(inputId, settingsKey, cssVar, isBorder, fitSettingsKey, fitCssVar) {
+            document.getElementById(inputId).addEventListener('change', e => {
+                const file = e.target.files[0];
+                if (file) {
+                    openImageEditor(file, isBorder, (dataUrl, fitVal) => {
+                        globalSettings[settingsKey] = dataUrl;
+                        if (!isBorder) {
+                            document.documentElement.style.setProperty(cssVar, `url(${dataUrl})`);
+                            if (fitSettingsKey) {
+                                globalSettings[fitSettingsKey] = fitVal;
+                                document.documentElement.style.setProperty(fitCssVar, fitVal);
+                                document.documentElement.style.setProperty(fitCssVar + '-repeat', fitVal === 'auto' ? 'repeat' : 'no-repeat');
+                            }
+                        }
+                        document.getElementById(inputId).nextElementSibling.classList.remove('hidden');
+                        
+                        scheduleData.forEach(item => updateBlockVisuals(item.id));
+                        saveData();
+                    });
+                }
+                e.target.value = '';
+            });
+            document.getElementById(inputId).nextElementSibling.addEventListener('click', function() {
+                globalSettings[settingsKey] = null;
+                if (!isBorder) {
+                    document.documentElement.style.removeProperty(cssVar);
+                    if (fitSettingsKey) {
+                        globalSettings[fitSettingsKey] = 'cover';
+                        document.documentElement.style.setProperty(fitCssVar, 'cover');
+                        document.documentElement.style.setProperty(fitCssVar + '-repeat', 'no-repeat');
+                    }
+                }
+                document.getElementById(inputId).value = '';
+                this.classList.add('hidden');
+                
+                scheduleData.forEach(item => updateBlockVisuals(item.id));
+                saveData();
+            });
+        }
+        setupGlobalImageUpload('scheduleBgInput', 'scheduleBgImage', '--schedule-bg-image', false, 'scheduleBgFit', '--schedule-bg-size');
+        setupGlobalImageUpload('classBgInput', 'classBgImage', '--class-bg-image', false, 'classBgFit', '--class-bg-size');
+        setupGlobalImageUpload('classBorderInput', 'classBorderImage', '--class-border-image', true);
+
+        const attachFontColor = (id, prop, cssVar) => {
+            document.getElementById(id).addEventListener('input', e => {
+                globalSettings[prop] = e.target.value;
+                document.documentElement.style.setProperty(cssVar, e.target.value);
+                saveData();
+            });
+        };
+        attachFontColor('globalFont', 'font', '--main-font');
+        attachFontColor('headerBgColor', 'headerBgColor', '--header-bg');
+        attachFontColor('headerTextColor', 'headerTextColor', '--header-text-color');
+        attachFontColor('timeBgColor', 'timeBgColor', '--time-bg');
+        attachFontColor('timeTextColor', 'timeTextColor', '--time-text-color');
+        
+        document.getElementById('globalClassTextColor').addEventListener('input', e => {
+            globalSettings.globalClassTextColor = e.target.value;
+            document.documentElement.style.setProperty('--class-text-color', hexToRgba(e.target.value, globalSettings.classTextOpacity ?? 1));
+            saveData();
+        });
+
+        document.getElementById('globalClassTextOpacity').addEventListener('input', e => {
+            const opacity = e.target.value / 100;
+            globalSettings.classTextOpacity = opacity;
+            document.getElementById('globalClassTextOpacityVal').innerText = `${e.target.value}%`;
+            document.documentElement.style.setProperty('--class-text-color', hexToRgba(globalSettings.globalClassTextColor, opacity));
+            saveData();
+        });
+
+        document.getElementById('gridLinesColor').addEventListener('input', e => {
+            globalSettings.gridLinesColor = e.target.value;
+            document.documentElement.style.setProperty('--grid-line', hexToRgba(e.target.value, globalSettings.gridLinesOpacity));
+            saveData();
+        });
+
+        document.getElementById('gridLinesOpacity').addEventListener('input', e => {
+            const opacityValue = e.target.value / 100;
+            globalSettings.gridLinesOpacity = opacityValue;
+            document.getElementById('gridLinesOpacityVal').innerText = `${e.target.value}%`;
+            document.documentElement.style.setProperty('--grid-line', hexToRgba(globalSettings.gridLinesColor, opacityValue));
+            saveData();
+        });
+
+        const saveGridText = () => {
+            globalSettings.headers = Array.from(document.querySelectorAll('.header-cell')).map(el => el.innerText);
+            globalSettings.times = Array.from(document.querySelectorAll('.time-cell')).map(el => el.innerText);
+            saveData();
+        };
+        document.querySelectorAll('.header-cell, .time-cell').forEach(el => el.addEventListener('input', saveGridText));
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            saveGridText();
+            const data = { scheduleData, globalSettings };
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'my_class_schedule.json';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        document.getElementById('exportPngBtn').addEventListener('click', function() {
+            const btn = this;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...`;
+            btn.disabled = true;
+
+            const container = document.getElementById('scheduleWrapper');
+            
+            const editableElements = container.querySelectorAll('[contenteditable="true"]');
+            editableElements.forEach(el => el.removeAttribute('contenteditable'));
+
+            htmlToImage.toPng(container, {
+                quality: 1.0,
+                pixelRatio: 2,
+                width: container.scrollWidth,
+                height: container.scrollHeight,
+                style: {
+                    margin: '0',
+                    transform: 'none'
+                }
+            })
+            .then(function (dataUrl) {
+                editableElements.forEach(el => el.setAttribute('contenteditable', 'true'));
+
+                const downloadLink = document.createElement("a");
+                downloadLink.href = dataUrl;
+                downloadLink.download = "class_schedule.png";
+                document.body.appendChild(downloadLink); 
+                downloadLink.click(); 
+                document.body.removeChild(downloadLink);
+                
+                btn.innerHTML = originalHtml; 
+                btn.disabled = false;
+            })
+            .catch(function (error) {
+                console.error('Error exporting PNG:', error);
+                editableElements.forEach(el => el.setAttribute('contenteditable', 'true'));
+                btn.innerHTML = originalHtml; 
+                btn.disabled = false;
+            });
+        });
+
+        document.getElementById('importInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    if (data.scheduleData) scheduleData = data.scheduleData;
+                    if (data.globalSettings) {
+                        globalSettings = Object.assign({}, globalSettings, data.globalSettings);
+                        applyGlobalSettings();
+                    }
+                    renderSchedule();
+                } catch (err) { console.error("Invalid format", err); }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        });
+
+        let currentlyEditingId = null;
+
+        function openEditPanel(id) {
+            currentlyEditingId = id;
+            const item = scheduleData.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('editingClassLabel').innerText = `Edit: ${item.subject} (${item.day})`;
+            const editPanel = document.getElementById('editClassPanel');
+            editPanel.classList.remove('hidden');
+
+            const wrapper = document.querySelector(`.class-block-wrapper[data-id="${id}"]`);
+            if (wrapper) {
+                const rect = wrapper.getBoundingClientRect();
+                const panelWidth = 320; 
+                const panelHeight = Math.min(editPanel.offsetHeight || 380, window.innerHeight * 0.8);
+
+                let left = rect.right + 12, top = rect.top;
+                if (left + panelWidth > window.innerWidth - 12) left = rect.left - panelWidth - 12;
+                if (left < 12) left = Math.max(12, (window.innerWidth - panelWidth) / 2);
+                if (top + panelHeight > window.innerHeight - 12) top = Math.max(12, window.innerHeight - panelHeight - 12);
+                if (top < 12) top = 12;
+                editPanel.style.left = `${left}px`; editPanel.style.top = `${top}px`;
+            }
+            
+            document.getElementById('editSubjectName').value = item.subject;
+            document.getElementById('editRoomName').value = item.room;
+            document.getElementById('editBgType').value = item.bgType || (item.customBg ? 'image' : 'default');
+            document.getElementById('editBgColor').value = item.bgColor || '#015F43';
+            document.getElementById('editClassBgInput').value = '';
+            document.getElementById('editBorderType').value = item.borderType || (item.customBorder ? 'image' : 'default');
+            document.getElementById('editBorderColor').value = item.borderColor || '#ffffff';
+            document.getElementById('editClassBorderInput').value = '';
+            document.getElementById('editTextColor').value = item.textColor || getComputedStyle(document.documentElement).getPropertyValue('--class-text-color').trim().substring(0,7) || '#ffffff';
+
+            const textOp = item.textOpacity !== undefined ? item.textOpacity * 100 : 100;
+            document.getElementById('editClassTextOpacity').value = textOp;
+            document.getElementById('editClassTextOpacityVal').innerText = `${textOp}%`;
+
+            const bgOp = item.bgOpacity !== undefined ? item.bgOpacity * 100 : 100;
+            document.getElementById('editClassBgOpacity').value = bgOp;
+            document.getElementById('editClassBgOpacityVal').innerText = `${bgOp}%`;
+
+            toggleEditContainers();
+            document.getElementById('clearEditClassBg').classList.toggle('hidden', !item.customBg);
+            document.getElementById('clearEditClassBorder').classList.toggle('hidden', !item.customBorder);
+            const errEl = document.getElementById('editPanelError'); if (errEl) errEl.classList.add('hidden');
+        }
+
+        document.addEventListener('pointerdown', (e) => {
+            const editPanel = document.getElementById('editClassPanel');
+            if (!editPanel || editPanel.classList.contains('hidden')) return;
+            if (!editPanel.contains(e.target) && !e.target.closest('.class-block-wrapper')) {
+                editPanel.classList.add('hidden');
+                currentlyEditingId = null;
+            }
+        });
+
+        function toggleEditContainers() {
+            document.getElementById('editBgColorContainer').classList.toggle('hidden', document.getElementById('editBgType').value !== 'color');
+            document.getElementById('editBgImageContainer').classList.toggle('hidden', document.getElementById('editBgType').value !== 'image');
+            document.getElementById('editBorderColorContainer').classList.toggle('hidden', document.getElementById('editBorderType').value !== 'color');
+            document.getElementById('editBorderImageContainer').classList.toggle('hidden', document.getElementById('editBorderType').value !== 'image');
+        }
+
+        document.getElementById('editSubjectName').addEventListener('input', e => {
+            if (!currentlyEditingId) return;
+            const item = scheduleData.find(i => i.id === currentlyEditingId);
+            item.subject = e.target.value;
+            document.getElementById('editingClassLabel').innerText = `Editing: ${item.subject} (${item.day})`;
+            updateBlockVisuals(currentlyEditingId); saveData();
+        });
+
+        document.getElementById('editRoomName').addEventListener('input', e => {
+            if (!currentlyEditingId) return;
+            scheduleData.find(i => i.id === currentlyEditingId).room = e.target.value;
+            updateBlockVisuals(currentlyEditingId); saveData();
+        });
+
+        ['editBgType', 'editBorderType'].forEach(id => {
+            document.getElementById(id).addEventListener('change', e => {
+                if (!currentlyEditingId) return;
+                const item = scheduleData.find(i => i.id === currentlyEditingId);
+                if(id === 'editBgType') item.bgType = e.target.value;
+                if(id === 'editBorderType') item.borderType = e.target.value;
+                toggleEditContainers(); updateBlockVisuals(currentlyEditingId); saveData();
+            });
+        });
+
+        document.getElementById('editBgColor').addEventListener('input', e => {
+            if (!currentlyEditingId) return;
+            const item = scheduleData.find(i => i.id === currentlyEditingId);
+            item.bgColor = e.target.value; item.bgType = 'color';
+            updateBlockVisuals(currentlyEditingId); saveData();
+        });
+
+        document.getElementById('editClassBgOpacity').addEventListener('input', e => {
+            if (!currentlyEditingId) return;
+            const item = scheduleData.find(i => i.id === currentlyEditingId);
+            item.bgOpacity = e.target.value / 100;
+            document.getElementById('editClassBgOpacityVal').innerText = `${e.target.value}%`;
+            updateBlockVisuals(currentlyEditingId); saveData();
+        });
+
+        document.getElementById('editBorderColor').addEventListener('input', e => {
+            if (!currentlyEditingId) return;
+            const item = scheduleData.find(i => i.id === currentlyEditingId);
+            item.borderColor = e.target.value; item.borderType = 'color';
+            updateBlockVisuals(currentlyEditingId); saveData();
+        });
+
+        document.getElementById('editTextColor').addEventListener('input', e => {
+            if (!currentlyEditingId) return;
+            scheduleData.find(i => i.id === currentlyEditingId).textColor = e.target.value;
+            updateBlockVisuals(currentlyEditingId); saveData();
+        });
+
+        document.getElementById('editClassTextOpacity').addEventListener('input', e => {
+            if (!currentlyEditingId) return;
+            scheduleData.find(i => i.id === currentlyEditingId).textOpacity = e.target.value / 100;
+            document.getElementById('editClassTextOpacityVal').innerText = `${e.target.value}%`;
+            updateBlockVisuals(currentlyEditingId); saveData();
+        });
+
+        document.getElementById('deleteEditClassBtn').addEventListener('click', () => {
+            if (!currentlyEditingId) return;
+            scheduleData = scheduleData.filter(item => item.id !== currentlyEditingId);
+            renderSchedule(); saveData();
+            document.getElementById('editClassPanel').classList.add('hidden');
+            currentlyEditingId = null;
+        });
+
+        document.getElementById('duplicateClassBtn').addEventListener('click', () => {
+            if (!currentlyEditingId) return;
+            const originalItem = scheduleData.find(i => i.id === currentlyEditingId);
+            if (!originalItem) return;
+            const startRow = timeToRowCoord(originalItem.start);
+            const endRow = timeToRowCoord(originalItem.end);
+            const durationMins = (endRow - startRow) * 30;
+            const availableSlot = findEarliestAvailableSlot(durationMins);
+            if (!availableSlot) {
+                const errEl = document.getElementById('editPanelError');
+                errEl.innerText = "No available slot found for duplication.";
+                errEl.classList.remove('hidden'); setTimeout(() => errEl.classList.add('hidden'), 3000);
+                return;
+            }
+            const newId = Date.now();
+            const duplicatedItem = { ...originalItem, id: newId, day: availableSlot.day, start: availableSlot.start, end: availableSlot.end };
+            scheduleData.push(duplicatedItem);
+            renderSchedule(newId); saveData();
+            document.getElementById('editClassPanel').classList.add('hidden');
+            currentlyEditingId = null;
+        });
+
+        document.getElementById('closeEditPanel').addEventListener('click', () => {
+            currentlyEditingId = null; document.getElementById('editClassPanel').classList.add('hidden');
+        });
+
+        function setupSpecificImageUpload(inputId, dataKey, clearBtnId) {
+            document.getElementById(inputId).addEventListener('change', e => {
+                const file = e.target.files[0];
+                if (!currentlyEditingId || !file) return;
+                openImageEditor(file, (dataKey === 'customBorder'), (dataUrl, fitVal) => {
+                    const item = scheduleData.find(i => i.id === currentlyEditingId);
+                    item[dataKey] = dataUrl;
+                    if (dataKey === 'customBg') { item.bgType = 'image'; item.customBgFit = fitVal; }
+                    if (dataKey === 'customBorder') item.borderType = 'image';
+                    updateBlockVisuals(currentlyEditingId);
+                    document.getElementById(clearBtnId).classList.remove('hidden');
+                    saveData();
+                });
+                e.target.value = '';
+            });
+            document.getElementById(clearBtnId).addEventListener('click', function() {
+                if (!currentlyEditingId) return;
+                const item = scheduleData.find(i => i.id === currentlyEditingId);
+                item[dataKey] = null;
+                if (dataKey === 'customBg') { item.bgType = 'default'; item.customBgFit = 'cover'; document.getElementById('editBgType').value = 'default'; }
+                if (dataKey === 'customBorder') { item.borderType = 'default'; document.getElementById('editBorderType').value = 'default'; }
+                toggleEditContainers(); updateBlockVisuals(currentlyEditingId);
+                document.getElementById(clearBtnId).classList.add('hidden');
+                saveData();
+            });
+        }
+        setupSpecificImageUpload('editClassBgInput', 'customBg', 'clearEditClassBg');
+        setupSpecificImageUpload('editClassBorderInput', 'customBorder', 'clearEditClassBorder');
+
+        window.onload = function() {
+            renderSchedule();
+            applyGlobalSettings();
+        };
+    </script>
+</body>
+</html>
