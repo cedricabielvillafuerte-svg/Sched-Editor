@@ -1023,161 +1023,146 @@
         // UPGRADED OCR AUTOMATED IMAGE SCANNING LOGIC 
         // ----------------------------------------------------------------------
         document.getElementById('ocrImageInput').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const btnLabel = document.getElementById('ocrBtnLabel');
-            const statusLabel = document.getElementById('ocrStatus');
-            
-            btnLabel.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Scanning Schedule...`;
-            statusLabel.innerText = "Aligning Pixel Grid...";
-            statusLabel.classList.remove('hidden');
-
-            const img = new Image();
-            img.src = URL.createObjectURL(file);
-            
-            img.onload = async () => {
-                try {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
-
-                    // 1. Precise Grid Math (Accounts for exact exported proportions)
-                    // The DOM wrapper is 754px high including the 1px top/bottom borders.
-                    const scale = img.height / 754; 
-                    const border = 1 * scale;
-                    const headerH = 32 * scale;
-                    const rowH = 24 * scale;
-                    const timeColW = 60 * scale;
-                    const dayColW = (img.width - timeColW - (2 * border)) / 6;
-
-                    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                    const extractedClasses = [];
-
-                    statusLabel.innerText = "Processing Pixel Grid for Classes...";
-
-                    for (let col = 0; col < 6; col++) {
-                        let currentClass = null;
-
-                        for (let row = 0; row < 30; row++) {
-                            // Target the absolute dead-center of the cell to avoid all grid lines and diagonal cuts
-                            const centerX = border + timeColW + (col * dayColW) + (dayColW / 2);
-                            const centerY = border + headerH + (row * rowH) + (rowH / 2);
-
-                            const pixel = ctx.getImageData(Math.round(centerX), Math.round(centerY), 1, 1).data;
-                            
-                            // Average brightness. Empty grid is very light (>220).
-                            const brightness = (pixel[0] + pixel[1] + pixel[2]) / 3;
-                            const isFilled = brightness < 200; // Strict threshold to ignore empty grid
-
-                            if (isFilled) {
-                                if (!currentClass) {
-                                    currentClass = {
-                                        day: days[col],
-                                        startRow: row,
-                                        endRow: row + 1,
-                                        pixelX: border + timeColW + (col * dayColW),
-                                        pixelY: border + headerH + (row * rowH)
-                                    };
-                                } else {
-                                    currentClass.endRow = row + 1; // Extend continuous block
-                                }
+        const file = e.target.files[0];
+        if (!file) return;
+    
+        const btnLabel = document.getElementById('ocrBtnLabel');
+        const statusLabel = document.getElementById('ocrStatus');
+        
+        btnLabel.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Scanning Schedule...`;
+        statusLabel.innerText = "Aligning Pixel Grid...";
+        statusLabel.classList.remove('hidden');
+    
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        
+        img.onload = async () => {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+    
+                // Proportional Grid Dimensions (Header = 32px, Body = 720px, Total = 752px)
+                const headerH = img.height * (32 / 752);
+                const bodyH = img.height - headerH;
+                const rowH = bodyH / 30;
+    
+                const timeColW = img.width * (60 / 720);
+                const dayColW = (img.width - timeColW) / 6;
+    
+                const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const extractedClasses = [];
+    
+                statusLabel.innerText = "Processing Pixel Grid for Classes...";
+    
+                for (let col = 0; col < 6; col++) {
+                    let currentClass = null;
+    
+                    for (let row = 0; row < 30; row++) {
+                        const centerX = timeColW + (col * dayColW) + (dayColW / 2);
+                        const centerY = headerH + (row * rowH) + (rowH / 2);
+    
+                        const pixel = ctx.getImageData(Math.round(centerX), Math.round(centerY), 1, 1).data;
+                        const r = pixel[0], g = pixel[1], b = pixel[2];
+    
+                        // Strictly detect dark green class blocks (ignores brown header and light grid background)
+                        const isFilled = (g > r + 15) && (g > b) && (r < 120) && (g < 160);
+    
+                        if (isFilled) {
+                            if (!currentClass) {
+                                currentClass = {
+                                    day: days[col],
+                                    startRow: row,
+                                    endRow: row + 1,
+                                    pixelX: timeColW + (col * dayColW),
+                                    pixelY: headerH + (row * rowH)
+                                };
                             } else {
-                                if (currentClass) {
-                                    extractedClasses.push(currentClass);
-                                    currentClass = null;
-                                }
+                                currentClass.endRow = row + 1;
+                            }
+                        } else {
+                            if (currentClass) {
+                                extractedClasses.push(currentClass);
+                                currentClass = null;
                             }
                         }
-                        if (currentClass) extractedClasses.push(currentClass); 
                     }
-
-                    if (extractedClasses.length === 0) {
-                        statusLabel.innerText = "No classes found! Please check image format.";
-                        btnLabel.innerHTML = `Upload & Scan Image`;
-                        return;
-                    }
-
-                    statusLabel.innerText = `Found ${extractedClasses.length} class blocks. Initializing OCR...`;
-                    const worker = await Tesseract.createWorker('eng');
-
-                    for (const [index, cls] of extractedClasses.entries()) {
-                        statusLabel.innerText = `Extracting Text: ${index + 1} of ${extractedClasses.length}...`;
-                        
-                        const boxW = Math.max(1, Math.round(dayColW));
-                        const boxH = Math.max(1, Math.round((cls.endRow - cls.startRow) * rowH));
-                        const safeX = Math.round(cls.pixelX);
-                        const safeY = Math.round(cls.pixelY);
-
-                        // 2. High-Contrast Binarization & Scaling
-                        const tempCanvas = document.createElement('canvas');
-                        // Scale up 3x so Tesseract has massive, clear text to read
-                        tempCanvas.width = boxW * 3;
-                        tempCanvas.height = boxH * 3;
-                        const tCtx = tempCanvas.getContext('2d');
-                        tCtx.drawImage(canvas, safeX, safeY, boxW, boxH, 0, 0, boxW * 3, boxH * 3);
-
-                        // Convert white text to pure black, and green background to pure white
-                        const imgData = tCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-                        const data = imgData.data;
-                        for (let i = 0; i < data.length; i += 4) {
-                            if (data[i] > 180 && data[i+1] > 180 && data[i+2] > 180) {
-                                data[i] = 0; data[i+1] = 0; data[i+2] = 0; // Text becomes Black
-                            } else {
-                                data[i] = 255; data[i+1] = 255; data[i+2] = 255; // Background becomes White
-                            }
-                        }
-                        tCtx.putImageData(imgData, 0, 0);
-
-                        const blockDataUrl = tempCanvas.toDataURL('image/png');
-                        const { data: { text } } = await worker.recognize(blockDataUrl);
-                        
-                        // 3. Noise Filter & Block Splitting
-                        // Remove weird symbols, keep only alphanumeric, spaces, and hyphens
-                        const cleanLines = text.split('\n')
-                            .map(l => l.replace(/[^a-zA-Z0-9 -]/g, '').trim())
-                            .filter(l => l.length > 2); // Ignore 1-letter noise
-
-                        // Check if touching classes merged (e.g., we expect 2 lines, but found 4 or 6)
-                        const numClassesMerged = Math.max(1, Math.floor(cleanLines.length / 2));
-                        
-                        const totalRows = cls.endRow - cls.startRow;
-                        const rowsPerClass = Math.floor(totalRows / numClassesMerged);
-
-                        for(let i = 0; i < numClassesMerged; i++) {
-                            const startR = cls.startRow + (i * rowsPerClass);
-                            const endR = (i === numClassesMerged - 1) ? cls.endRow : startR + rowsPerClass;
-
-                            scheduleData.push({
-                                id: Date.now() + Math.random(),
-                                subject: cleanLines[i*2] ? cleanLines[i*2] : 'Unknown Subject',
-                                room: cleanLines[i*2 + 1] ? cleanLines[i*2 + 1] : 'Unknown Room',
-                                day: cls.day,
-                                start: rowCoordToTime(startR + 2),
-                                end: rowCoordToTime(endR + 2),
-                                customClass: null
-                            });
-                        }
-                    }
-
-                    await worker.terminate();
-                    statusLabel.innerText = "Schedule successfully imported!";
-                    setTimeout(() => statusLabel.classList.add('hidden'), 3000);
-
-                    renderSchedule();
-                    saveData();
-
-                } catch (error) {
-                    console.error("OCR Extraction Failed:", error);
-                    statusLabel.innerText = "An error occurred during scanning.";
+                    if (currentClass) extractedClasses.push(currentClass); 
                 }
-
-                btnLabel.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg> Upload & Scan Image`;
-                e.target.value = '';
-            };
-        });
+    
+                if (extractedClasses.length === 0) {
+                    statusLabel.innerText = "No classes found! Please check image format.";
+                    btnLabel.innerHTML = `Upload & Scan Image`;
+                    return;
+                }
+    
+                statusLabel.innerText = `Found ${extractedClasses.length} class blocks. Initializing OCR...`;
+                const worker = await Tesseract.createWorker('eng');
+    
+                for (const [index, cls] of extractedClasses.entries()) {
+                    statusLabel.innerText = `Extracting Text: ${index + 1} of ${extractedClasses.length}...`;
+                    
+                    const boxW = Math.max(1, Math.round(dayColW));
+                    const boxH = Math.max(1, Math.round((cls.endRow - cls.startRow) * rowH));
+                    const safeX = Math.round(cls.pixelX);
+                    const safeY = Math.round(cls.pixelY);
+    
+                    const tempCanvas = document.createElement('canvas');
+                    const scaleFactor = 3;
+                    tempCanvas.width = boxW * scaleFactor;
+                    tempCanvas.height = boxH * scaleFactor;
+                    const tCtx = tempCanvas.getContext('2d');
+                    tCtx.drawImage(canvas, safeX, safeY, boxW, boxH, 0, 0, tempCanvas.width, tempCanvas.height);
+    
+                    // Preserve font anti-aliasing with relative luminance thresholding
+                    const imgData = tCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                    const data = imgData.data;
+                    for (let i = 0; i < data.length; i += 4) {
+                        const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                        if (lum > 120) {
+                            data[i] = 0; data[i+1] = 0; data[i+2] = 0; // Text -> Black
+                        } else {
+                            data[i] = 255; data[i+1] = 255; data[i+2] = 255; // Background -> White
+                        }
+                    }
+                    tCtx.putImageData(imgData, 0, 0);
+    
+                    const blockDataUrl = tempCanvas.toDataURL('image/png');
+                    const { data: { text } } = await worker.recognize(blockDataUrl);
+                    
+                    const cleanLines = text.split('\n')
+                        .map(l => l.replace(/[^a-zA-Z0-9 -]/g, '').trim())
+                        .filter(l => l.length >= 2);
+    
+                    scheduleData.push({
+                        id: Date.now() + Math.random(),
+                        subject: cleanLines[0] || 'Unknown Subject',
+                        room: cleanLines.slice(1).join(' ') || 'Unknown Room',
+                        day: cls.day,
+                        start: rowCoordToTime(cls.startRow + 2),
+                        end: rowCoordToTime(cls.endRow + 2),
+                        customClass: null
+                    });
+                }
+    
+                await worker.terminate();
+                statusLabel.innerText = "Schedule successfully imported!";
+                setTimeout(() => statusLabel.classList.add('hidden'), 3000);
+    
+                renderSchedule();
+                saveData();
+    
+            } catch (error) {
+                console.error("OCR Extraction Failed:", error);
+                statusLabel.innerText = "An error occurred during scanning.";
+            }
+    
+            btnLabel.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg> Upload & Scan Image`;
+            e.target.value = '';
+        };
+    });
         
         // ----------------------------------------------------------------------
         
