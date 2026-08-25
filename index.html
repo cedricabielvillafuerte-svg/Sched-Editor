@@ -1172,6 +1172,63 @@
                 btnIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>`;
                 btnIcon.classList.remove('animate-spin');
             }
+        });// Global Schedule Background Image
+        document.getElementById('scheduleBgInput').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) {
+                openImageEditor(file, false, (imgData, fit) => {
+                    globalSettings.scheduleBgImage = imgData;
+                    globalSettings.scheduleBgFit = fit;
+                    document.getElementById('clearScheduleBg').classList.remove('hidden');
+                    toggleGlobalContainers(true);
+                });
+            }
+        });
+
+        document.getElementById('clearScheduleBg').addEventListener('click', () => {
+            globalSettings.scheduleBgImage = null;
+            document.getElementById('scheduleBgInput').value = '';
+            document.getElementById('clearScheduleBg').classList.add('hidden');
+            toggleGlobalContainers(true);
+        });
+
+        // Global Class Background Image
+        document.getElementById('classBgInput').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) {
+                openImageEditor(file, false, (imgData, fit) => {
+                    globalSettings.classBgImage = imgData;
+                    globalSettings.classBgFit = fit;
+                    document.getElementById('clearClassBg').classList.remove('hidden');
+                    toggleGlobalContainers(true);
+                });
+            }
+        });
+
+        document.getElementById('clearClassBg').addEventListener('click', () => {
+            globalSettings.classBgImage = null;
+            document.getElementById('classBgInput').value = '';
+            document.getElementById('clearClassBg').classList.add('hidden');
+            toggleGlobalContainers(true);
+        });
+
+        // Global Class Border Image
+        document.getElementById('classBorderInput').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) {
+                openImageEditor(file, true, (imgData) => {
+                    globalSettings.classBorderImage = imgData;
+                    document.getElementById('clearClassBorder').classList.remove('hidden');
+                    toggleGlobalContainers(true);
+                });
+            }
+        });
+
+        document.getElementById('clearClassBorder').addEventListener('click', () => {
+            globalSettings.classBorderImage = null;
+            document.getElementById('classBorderInput').value = '';
+            document.getElementById('clearClassBorder').classList.add('hidden');
+            toggleGlobalContainers(true);
         });
 
         function applyGlobalSettings() {
