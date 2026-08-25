@@ -2193,14 +2193,32 @@
         });
 
         // Export JSON file
+       // Fast & Crash-Proof Export to JSON
         document.getElementById('exportBtn').addEventListener('click', () => {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ scheduleData, globalSettings }, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `class_schedule_${new Date().toISOString().slice(0, 10)}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
+            try {
+                // 1. Serialize data (omitting extra indentation saves memory and file size)
+                const jsonString = JSON.stringify({ scheduleData, globalSettings });
+
+                // 2. Create a Blob directly from the JSON string
+                const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+
+                // 3. Generate a temporary Object URL (avoids data: URI limits)
+                const blobUrl = URL.createObjectURL(blob);
+
+                // 4. Trigger download
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.href = blobUrl;
+                downloadAnchor.download = `class_schedule_${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+
+                // 5. Clean up DOM and revoke the URL to prevent memory leaks
+                downloadAnchor.remove();
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+            } catch (err) {
+                console.error("Export failed:", err);
+                alert("Failed to export schedule file: " + err.message);
+            }
         });
 
         // Import JSON file
