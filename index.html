@@ -2190,7 +2190,7 @@
         // Export as PNG Image
         document.getElementById('exportPngBtn').addEventListener('click', () => {
             const gridEl = document.getElementById('gridContainer');
-            const wrapperEl = document.getElementById('scheduleWrapper'); // Get the wrapper that holds the background
+            const wrapperEl = document.getElementById('scheduleWrapper');
             
             if (!gridEl || !wrapperEl) return;
             
@@ -2198,12 +2198,10 @@
             originalBtn.innerText = "Generating PNG Image...";
             originalBtn.disabled = true;
 
-            // Grab the active background styles from the parent wrapper
             const wrapperStyle = window.getComputedStyle(wrapperEl);
 
             htmlToImage.toPng(gridEl, { 
                 quality: 0.95,
-                // Inject the wrapper's background into the grid specifically for the export
                 style: {
                     backgroundColor: wrapperStyle.backgroundColor,
                     backgroundImage: wrapperStyle.backgroundImage,
@@ -2226,5 +2224,12 @@
                     originalBtn.disabled = false;
                 });
         });
+
+        window.onload = function() {
+            generateGridLines();
+            applyGlobalSettings();
+            renderSchedule();
+        };
+    </script>
 </body>
 </html>
