@@ -1044,34 +1044,43 @@
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
     
-                // Proportional Grid Dimensions
-                const headerH = img.height * (32 / 752);
-                const bodyH = img.height - headerH;
-                const rowH = bodyH / 30;
-    
+                // Dynamic Header & Grid Detection
                 const timeColW = img.width * (60 / 720);
                 const dayColW = (img.width - timeColW) / 6;
     
+                // Detect exact top header boundary (transition from dark brown to light grid)
+                let headerH = img.height * (32 / 752);
+                for (let y = Math.round(img.height * 0.02); y < img.height * 0.15; y++) {
+                    const px = ctx.getImageData(Math.round(timeColW + 10), y, 1, 1).data;
+                    if (px[1] > px[0] + 15 && px[1] > 140) { // Light green background hit
+                        headerH = y;
+                        break;
+                    }
+                }
+    
+                const bodyH = img.height - headerH;
+                const rowH = bodyH / 30; // 30 half-hour rows from 7:00 AM
                 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                 const extractedBlocks = [];
     
-                // Helper: 3x3 Multi-Point Cell Sampling to ignore text pixels
+                // 25-Point Area Sampling to prevent white text false negatives
                 function isCellFilled(colX, rowY, w, h) {
                     let greenCount = 0;
-                    const sampleRatios = [0.25, 0.5, 0.75];
-                    for (const sx of sampleRatios) {
-                        for (const sy of sampleRatios) {
+                    const steps = [0.2, 0.35, 0.5, 0.65, 0.8];
+                    for (const sx of steps) {
+                        for (const sy of steps) {
                             const px = Math.round(colX + w * sx);
                             const py = Math.round(rowY + h * sy);
                             const pixel = ctx.getImageData(px, py, 1, 1).data;
                             const r = pixel[0], g = pixel[1], b = pixel[2];
                             
-                            // Dark green block profile
-                            const isDarkGreen = (g > r + 10) && (g > b) && (g < 170) && (r < 130);
-                            if (isDarkGreen) greenCount++;
+                            // Dark green class block detection profile
+                            if (g > r + 10 && g > b && g < 170 && r < 130) {
+                                greenCount++;
+                            }
                         }
                     }
-                    return greenCount >= 3;
+                    return (greenCount / 25) >= 0.35; // At least 35% of cell is dark green
                 }
     
                 statusLabel.innerText = "Detecting Schedule Blocks...";
@@ -1108,20 +1117,23 @@
                 }
     
                 if (extractedBlocks.length === 0) {
-                    statusLabel.innerText = "No classes found! Please check image format.";
+                    statusLabel.innerText = "No classes found! Check image input.";
                     btnLabel.innerHTML = `Upload & Scan Image`;
                     return;
                 }
     
-                statusLabel.innerText = `Found ${extractedBlocks.length} schedule regions. Initializing OCR...`;
+                statusLabel.innerText = `Found ${extractedBlocks.length} region(s). Initializing OCR...`;
     
+                // Initialize Tesseract without English dictionary autocorrect
                 const worker = await Tesseract.createWorker('eng');
                 await worker.setParameters({
-                    tessedit_pageseg_mode: '6', // Read structured lines
+                    tessedit_pageseg_mode: '6',
                     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -/',
+                    load_system_dawg: '0',
+                    load_freq_dawg: '0'
                 });
     
-                scheduleData = []; // Reset schedule array
+                scheduleData = []; // Clear current schedule
     
                 for (const [index, block] of extractedBlocks.entries()) {
                     statusLabel.innerText = `Extracting Text: ${index + 1} of ${extractedBlocks.length}...`;
@@ -1133,20 +1145,22 @@
                     const boxH = Math.round((block.endRow - block.startRow) * rowH) + (pad * 2);
     
                     const tempCanvas = document.createElement('canvas');
-                    const scaleFactor = 3; // 3x upscale for sharp text
+                    const scaleFactor = 3;
                     tempCanvas.width = boxW * scaleFactor;
                     tempCanvas.height = boxH * scaleFactor;
     
                     const tCtx = tempCanvas.getContext('2d');
-                    tCtx.imageSmoothingEnabled = false;
+                    tCtx.imageSmoothingEnabled = true;
                     tCtx.drawImage(canvas, safeX, safeY, boxW, boxH, 0, 0, tempCanvas.width, tempCanvas.height);
     
-                    // INVERT LUMINANCE: White text on green -> Black text on white background
+                    // Anti-Aliased Contrast Inversion (White Text on Green -> Crisp Black Text on White)
                     const imgData = tCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
                     const data = imgData.data;
                     for (let i = 0; i < data.length; i += 4) {
                         const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-                        const val = lum > 140 ? 0 : 255; // High luminance -> Black text, Low -> White BG
+                        let inv = 255 - lum; // Invert luminance
+                        inv = (inv - 90) * 2.2; // Contrast stretch
+                        const val = Math.max(0, Math.min(255, inv));
                         data[i] = val;
                         data[i+1] = val;
                         data[i+2] = val;
@@ -1155,15 +1169,23 @@
     
                     const { data: ocrResult } = await worker.recognize(tempCanvas.toDataURL('image/png'));
                     
-                    // Regex pattern matching course codes (e.g., DEVC 70, HK 12, WIKA 1, COMM 10)
-                    const isCourseHeader = (str) => /^[A-Z]{2,6}\s*\d+/i.test(str.trim());
+                    // Recognize Course Codes (e.g., DEVC 70, HK 12, WIKA 1, COMM 10)
+                    const isCourseHeader = (str) => /^(DEVC|HK|WIKA|COMM|STAT|MATH|ENG|[A-Z]{2,6})\s*\d+/i.test(str.trim());
     
-                    // Group detected text lines into course subjects
                     const detectedCourses = [];
                     let currentCourse = null;
     
                     for (const lineObj of ocrResult.lines) {
-                        const lineText = lineObj.text.replace(/[^a-zA-Z0-9 -/]/g, '').trim();
+                        let lineText = lineObj.text.replace(/[^a-zA-Z0-9 -/]/g, '').trim();
+                        
+                        // Specific UPLB OCR typo fixes
+                        lineText = lineText
+                            .replace(/\b(DEV|DEVO|DEVC101B|DEVC111E|DEVC103E|DEVCa0)\b/gi, 'DEVC')
+                            .replace(/\bSTaL\b/g, 'ST3L')
+                            .replace(/\bDCB\b/g, 'DC8')
+                            .replace(/\bX3 y\b/g, 'X3')
+                            .replace(/\bx3 1\b/g, 'X3');
+    
                         if (lineText.length < 2) continue;
     
                         if (isCourseHeader(lineText)) {
@@ -1187,7 +1209,7 @@
                     }
                     if (currentCourse) detectedCourses.push(currentCourse);
     
-                    // Split merged contiguous blocks into individual classes
+                    // Split Contiguous Classes Proportionally
                     if (detectedCourses.length <= 1) {
                         const single = detectedCourses[0] || { subject: 'Unknown Subject', roomLines: [] };
                         scheduleData.push({
