@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
     <!-- Add Tesseract.js for OCR -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
     <style>
         :root {
             --header-bg: #4A302D;
@@ -1107,17 +1107,25 @@
                     for (const [index, cls] of extractedClasses.entries()) {
                         statusLabel.innerText = `Extracting Text: ${index + 1} of ${extractedClasses.length}...`;
                         
-                        const boxW = dayColW;
-                        const boxH = (cls.endRow - cls.startRow) * rowH;
+                        // Failsafe 1: Force strict integers to prevent WebAssembly buffer crashes
+                        const boxW = Math.max(1, Math.round(dayColW));
+                        const boxH = Math.max(1, Math.round((cls.endRow - cls.startRow) * rowH));
+                        const safeX = Math.round(cls.pixelX);
+                        const safeY = Math.round(cls.pixelY);
 
                         // Isolate this specific class block onto a temporary canvas
                         const tempCanvas = document.createElement('canvas');
                         tempCanvas.width = boxW;
                         tempCanvas.height = boxH;
                         const tCtx = tempCanvas.getContext('2d');
-                        tCtx.drawImage(canvas, cls.pixelX, cls.pixelY, boxW, boxH, 0, 0, boxW, boxH);
+                        
+                        // Draw using the sanitized integer coordinates
+                        tCtx.drawImage(canvas, safeX, safeY, boxW, boxH, 0, 0, boxW, boxH);
 
-                        const { data: { text } } = await worker.recognize(tempCanvas);
+                        // Failsafe 2: Convert to Data URL instead of passing the raw canvas 
+                        const blockDataUrl = tempCanvas.toDataURL('image/png');
+
+                        const { data: { text } } = await worker.recognize(blockDataUrl);
                         
                         // Parse multiline string into Subject and Room
                         const lines = text.split('\n').filter(l => l.trim() !== '');
@@ -1125,7 +1133,6 @@
                         cls.room = lines[1] ? lines[1].trim() : 'Unknown Room';
 
                         // Convert block coordinates back to localized 12-hour times
-                        // Note: Our loop row 0 is equal to 7:00am, which corresponds to rowCoord 2 in the DOM logic.
                         cls.start = rowCoordToTime(cls.startRow + 2);
                         cls.end = rowCoordToTime(cls.endRow + 2);
 
