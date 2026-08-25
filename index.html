@@ -2190,12 +2190,28 @@
         // Export as PNG Image
         document.getElementById('exportPngBtn').addEventListener('click', () => {
             const gridEl = document.getElementById('gridContainer');
-            if (!gridEl) return;
+            const wrapperEl = document.getElementById('scheduleWrapper'); // Get the wrapper that holds the background
+            
+            if (!gridEl || !wrapperEl) return;
+            
             const originalBtn = document.getElementById('exportPngBtn');
             originalBtn.innerText = "Generating PNG Image...";
             originalBtn.disabled = true;
 
-            htmlToImage.toPng(gridEl, { quality: 0.95 })
+            // Grab the active background styles from the parent wrapper
+            const wrapperStyle = window.getComputedStyle(wrapperEl);
+
+            htmlToImage.toPng(gridEl, { 
+                quality: 0.95,
+                // Inject the wrapper's background into the grid specifically for the export
+                style: {
+                    backgroundColor: wrapperStyle.backgroundColor,
+                    backgroundImage: wrapperStyle.backgroundImage,
+                    backgroundSize: wrapperStyle.backgroundSize,
+                    backgroundRepeat: wrapperStyle.backgroundRepeat,
+                    backgroundPosition: wrapperStyle.backgroundPosition
+                }
+            })
                 .then(dataUrl => {
                     const link = document.createElement('a');
                     link.download = `schedule_${new Date().toISOString().slice(0, 10)}.png`;
@@ -2210,12 +2226,5 @@
                     originalBtn.disabled = false;
                 });
         });
-
-        window.onload = function() {
-            generateGridLines();
-            applyGlobalSettings();
-            renderSchedule();
-        };
-    </script>
 </body>
 </html>
