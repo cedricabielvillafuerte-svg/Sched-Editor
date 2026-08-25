@@ -1020,7 +1020,7 @@
         });
 
         // ----------------------------------------------------------------------
-        // NEW OCR AUTOMATED IMAGE SCANNING LOGIC 
+        // UPGRADED OCR AUTOMATED IMAGE SCANNING LOGIC 
         // ----------------------------------------------------------------------
         document.getElementById('ocrImageInput').addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -1030,7 +1030,7 @@
             const statusLabel = document.getElementById('ocrStatus');
             
             btnLabel.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Scanning Schedule...`;
-            statusLabel.innerText = "Initializing Tesseract Engine...";
+            statusLabel.innerText = "Aligning Pixel Grid...";
             statusLabel.classList.remove('hidden');
 
             const img = new Image();
@@ -1044,11 +1044,14 @@
                     canvas.height = img.height;
                     ctx.drawImage(img, 0, 0);
 
-                    // Grid relative coordinates based on the layout structure
-                    const timeColW = img.width * (60 / 720); 
-                    const dayColW = (img.width - timeColW) / 6;
-                    const headerH = img.height * (32 / 752);
-                    const rowH = (img.height - headerH) / 30;
+                    // 1. Precise Grid Math (Accounts for exact exported proportions)
+                    // The DOM wrapper is 754px high including the 1px top/bottom borders.
+                    const scale = img.height / 754; 
+                    const border = 1 * scale;
+                    const headerH = 32 * scale;
+                    const rowH = 24 * scale;
+                    const timeColW = 60 * scale;
+                    const dayColW = (img.width - timeColW - (2 * border)) / 6;
 
                     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                     const extractedClasses = [];
@@ -1058,30 +1061,28 @@
                     for (let col = 0; col < 6; col++) {
                         let currentClass = null;
 
-                        // 30 half-hour rows (7:00 AM to 10:00 PM)
                         for (let row = 0; row < 30; row++) {
-                            // Check the exact center of each 30 minute cell block
-                            const centerX = timeColW + (col * dayColW) + (dayColW / 2);
-                            const centerY = headerH + (row * rowH) + (rowH / 2);
+                            // Target the absolute dead-center of the cell to avoid all grid lines and diagonal cuts
+                            const centerX = border + timeColW + (col * dayColW) + (dayColW / 2);
+                            const centerY = border + headerH + (row * rowH) + (rowH / 2);
 
-                            const pixel = ctx.getImageData(centerX, centerY, 1, 1).data;
+                            const pixel = ctx.getImageData(Math.round(centerX), Math.round(centerY), 1, 1).data;
                             
-                            // Check for darkness (distinguishing dark block vs light background grid)
+                            // Average brightness. Empty grid is very light (>220).
                             const brightness = (pixel[0] + pixel[1] + pixel[2]) / 3;
-                            const isFilled = brightness < 150; 
+                            const isFilled = brightness < 200; // Strict threshold to ignore empty grid
 
                             if (isFilled) {
                                 if (!currentClass) {
                                     currentClass = {
                                         day: days[col],
-                                        startRow: row, // Mapped to DOM row via rowCoordToTime later
+                                        startRow: row,
                                         endRow: row + 1,
-                                        pixelX: timeColW + (col * dayColW),
-                                        pixelY: headerH + (row * rowH)
+                                        pixelX: border + timeColW + (col * dayColW),
+                                        pixelY: border + headerH + (row * rowH)
                                     };
                                 } else {
-                                    // Extend duration
-                                    currentClass.endRow = row + 1;
+                                    currentClass.endRow = row + 1; // Extend continuous block
                                 }
                             } else {
                                 if (currentClass) {
@@ -1090,7 +1091,7 @@
                                 }
                             }
                         }
-                        if (currentClass) extractedClasses.push(currentClass); // push if ends at very bottom
+                        if (currentClass) extractedClasses.push(currentClass); 
                     }
 
                     if (extractedClasses.length === 0) {
@@ -1099,56 +1100,69 @@
                         return;
                     }
 
-                    statusLabel.innerText = `Found ${extractedClasses.length} class blocks. Starting OCR...`;
-                    
-                    // Fire up Tesseract Worker
+                    statusLabel.innerText = `Found ${extractedClasses.length} class blocks. Initializing OCR...`;
                     const worker = await Tesseract.createWorker('eng');
 
                     for (const [index, cls] of extractedClasses.entries()) {
                         statusLabel.innerText = `Extracting Text: ${index + 1} of ${extractedClasses.length}...`;
                         
-                        // Failsafe 1: Force strict integers to prevent WebAssembly buffer crashes
                         const boxW = Math.max(1, Math.round(dayColW));
                         const boxH = Math.max(1, Math.round((cls.endRow - cls.startRow) * rowH));
                         const safeX = Math.round(cls.pixelX);
                         const safeY = Math.round(cls.pixelY);
 
-                        // Isolate this specific class block onto a temporary canvas
+                        // 2. High-Contrast Binarization & Scaling
                         const tempCanvas = document.createElement('canvas');
-                        tempCanvas.width = boxW;
-                        tempCanvas.height = boxH;
+                        // Scale up 3x so Tesseract has massive, clear text to read
+                        tempCanvas.width = boxW * 3;
+                        tempCanvas.height = boxH * 3;
                         const tCtx = tempCanvas.getContext('2d');
-                        
-                        // Draw using the sanitized integer coordinates
-                        tCtx.drawImage(canvas, safeX, safeY, boxW, boxH, 0, 0, boxW, boxH);
+                        tCtx.drawImage(canvas, safeX, safeY, boxW, boxH, 0, 0, boxW * 3, boxH * 3);
 
-                        // Failsafe 2: Convert to Data URL instead of passing the raw canvas 
+                        // Convert white text to pure black, and green background to pure white
+                        const imgData = tCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                        const data = imgData.data;
+                        for (let i = 0; i < data.length; i += 4) {
+                            if (data[i] > 180 && data[i+1] > 180 && data[i+2] > 180) {
+                                data[i] = 0; data[i+1] = 0; data[i+2] = 0; // Text becomes Black
+                            } else {
+                                data[i] = 255; data[i+1] = 255; data[i+2] = 255; // Background becomes White
+                            }
+                        }
+                        tCtx.putImageData(imgData, 0, 0);
+
                         const blockDataUrl = tempCanvas.toDataURL('image/png');
-
                         const { data: { text } } = await worker.recognize(blockDataUrl);
                         
-                        // Parse multiline string into Subject and Room
-                        const lines = text.split('\n').filter(l => l.trim() !== '');
-                        cls.subject = lines[0] ? lines[0].trim() : 'Unknown Subject';
-                        cls.room = lines[1] ? lines[1].trim() : 'Unknown Room';
+                        // 3. Noise Filter & Block Splitting
+                        // Remove weird symbols, keep only alphanumeric, spaces, and hyphens
+                        const cleanLines = text.split('\n')
+                            .map(l => l.replace(/[^a-zA-Z0-9 -]/g, '').trim())
+                            .filter(l => l.length > 2); // Ignore 1-letter noise
 
-                        // Convert block coordinates back to localized 12-hour times
-                        cls.start = rowCoordToTime(cls.startRow + 2);
-                        cls.end = rowCoordToTime(cls.endRow + 2);
+                        // Check if touching classes merged (e.g., we expect 2 lines, but found 4 or 6)
+                        const numClassesMerged = Math.max(1, Math.floor(cleanLines.length / 2));
+                        
+                        const totalRows = cls.endRow - cls.startRow;
+                        const rowsPerClass = Math.floor(totalRows / numClassesMerged);
 
-                        scheduleData.push({
-                            id: Date.now() + Math.random(),
-                            subject: cls.subject,
-                            room: cls.room,
-                            day: cls.day,
-                            start: cls.start,
-                            end: cls.end,
-                            customClass: null
-                        });
+                        for(let i = 0; i < numClassesMerged; i++) {
+                            const startR = cls.startRow + (i * rowsPerClass);
+                            const endR = (i === numClassesMerged - 1) ? cls.endRow : startR + rowsPerClass;
+
+                            scheduleData.push({
+                                id: Date.now() + Math.random(),
+                                subject: cleanLines[i*2] ? cleanLines[i*2] : 'Unknown Subject',
+                                room: cleanLines[i*2 + 1] ? cleanLines[i*2 + 1] : 'Unknown Room',
+                                day: cls.day,
+                                start: rowCoordToTime(startR + 2),
+                                end: rowCoordToTime(endR + 2),
+                                customClass: null
+                            });
+                        }
                     }
 
                     await worker.terminate();
-
                     statusLabel.innerText = "Schedule successfully imported!";
                     setTimeout(() => statusLabel.classList.add('hidden'), 3000);
 
@@ -1160,15 +1174,13 @@
                     statusLabel.innerText = "An error occurred during scanning.";
                 }
 
-                // Reset Button
                 btnLabel.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg> Upload & Scan Image`;
                 e.target.value = '';
             };
         });
-
+        
         // ----------------------------------------------------------------------
-
-
+        
         let addClassMode = 'fixed'; 
 
         const tabFixedTime = document.getElementById('tabFixedTime');
