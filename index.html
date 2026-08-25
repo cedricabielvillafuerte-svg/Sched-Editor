@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Class Schedule with AI Auto-Import</title>
+    <title>Class Schedule Editor by Cedric</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
     <style>
@@ -12,7 +12,7 @@
             --time-bg: #BA7F5F;
             --grid-bg: #E2F5D6;
             --class-bg: rgba(1, 95, 67, 1);
-            --grid-line: rgba(0, 128, 0, 0.15);
+            --grid-line: rgba(0, 128, 0, 0.2);
             --header-text-color: #ffffff;
             --time-text-color: #ffffff;
             --class-text-color: rgba(255, 255, 255, 1);
@@ -151,7 +151,8 @@
             display: flex;
             flex-direction: column;
             pointer-events: none;
-            z-index: 0;
+            z-index: 1;
+            height: 100%;
         }
 
         .horizontal-line {
@@ -171,12 +172,14 @@
              display: grid;
              grid-template-columns: repeat(6, 1fr);
              pointer-events: none;
-             z-index: 0;
+             z-index: 1;
+             height: 100%;
         }
 
         .vertical-line {
              border-right: 1px solid var(--grid-line);
              height: 100%;
+             box-sizing: border-box;
         }
 
         .class-block-wrapper {
@@ -291,6 +294,7 @@
             
             <div class="controls-content" id="controlsContent">
 
+                <!-- AI Auto-Import Section -->
                 <div class="accordion-section mb-4 bg-purple-50 rounded-lg border border-purple-200 overflow-hidden shadow-sm">
                     <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-purple-100 hover:bg-purple-200 transition-colors">
                         <span class="font-bold text-purple-900 text-sm uppercase flex items-center gap-1.5">
@@ -302,7 +306,6 @@
                     <div class="section-content p-4 pt-3 border-t border-purple-200">
                         <p class="text-xs text-purple-900 mb-3 leading-relaxed">Upload an image of your schedule or timetable, and Gemini AI will extract and place all classes into your grid automatically!</p>
                         
-                        <!-- Gemini API Key Input -->
                         <div class="mb-3">
                             <div class="flex justify-between items-center mb-1">
                                 <label for="geminiApiKey" class="block text-xs font-semibold text-gray-700">Gemini API Key</label>
@@ -314,13 +317,11 @@
                             </div>
                         </div>
 
-                        <!-- Schedule Image File Upload -->
                         <div class="mb-3">
                             <label class="block text-xs font-semibold text-gray-700 mb-1">Upload Schedule Image</label>
                             <input type="file" id="geminiImageInput" accept="image/png, image/jpeg, image/webp" class="text-xs w-full file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-purple-200 file:text-purple-800 hover:file:bg-purple-300 cursor-pointer bg-white border rounded">
                         </div>
 
-                        <!-- Image Preview Box -->
                         <div id="aiImagePreviewContainer" class="mb-3 hidden">
                             <p class="text-[11px] text-gray-500 mb-1 font-semibold">Image Preview:</p>
                             <div class="w-full h-32 rounded border border-purple-200 overflow-hidden bg-gray-50 flex items-center justify-center">
@@ -328,7 +329,6 @@
                             </div>
                         </div>
 
-                        <!-- Import Mode -->
                         <div class="mb-3">
                             <label class="block text-xs font-semibold text-gray-700 mb-1">Import Mode</label>
                             <div class="flex gap-4 text-xs text-gray-700">
@@ -343,7 +343,6 @@
                             </div>
                         </div>
 
-                        <!-- Submit Button -->
                         <button type="button" id="aiExtractBtn" class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-2 px-4 rounded text-xs transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50">
                             <svg id="aiBtnIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                             <span id="aiBtnText">Extract & Load Schedule</span>
@@ -353,6 +352,7 @@
                     </div>
                 </div>
                 
+                <!-- Save / Export Section -->
                 <div class="accordion-section mb-4 bg-green-50 rounded border border-green-200 overflow-hidden shadow-sm">
                     <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-green-100 hover:bg-green-200 transition-colors">
                         <span class="font-semibold text-green-800 text-sm uppercase">Save / Export</span>
@@ -370,7 +370,6 @@
                             </button>
                         </div>
 
-                        <!-- PNG Export Section -->
                         <div class="border-t border-green-200 pt-4">
                             <p class="text-[11px] text-green-800 mb-3 leading-tight">Download a picture of your current schedule grid.</p>
                             <button id="exportPngBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded text-sm transition flex items-center justify-center gap-2">
@@ -381,13 +380,13 @@
                     </div>
                 </div>
 
+                <!-- Add New Class Section -->
                 <div class="accordion-section mb-4 bg-gray-50 rounded border border-gray-200 overflow-hidden shadow-sm">
                     <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-gray-100 hover:bg-gray-200 transition-colors">
                         <span class="font-semibold text-gray-700 text-sm uppercase">Add New Class</span>
                         <svg class="chevron w-4 h-4 text-gray-500 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     <div class="section-content p-4 pt-3 border-t border-gray-200">
-                        
                         <div class="flex rounded-md bg-gray-200 p-1 mb-4">
                             <button type="button" id="tabFixedTime" class="flex-1 py-1 text-xs font-semibold rounded bg-white text-gray-800 shadow-sm transition-all">
                                 Fixed Time
@@ -595,6 +594,7 @@
                     </div>
                 </div>
 
+                <!-- Current Classes Section -->
                 <div class="accordion-section mb-2 bg-gray-50 rounded border border-gray-200 overflow-hidden shadow-sm">
                     <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-gray-100 hover:bg-gray-200 transition-colors">
                         <span class="font-semibold text-gray-700 text-sm uppercase flex items-center">
@@ -648,11 +648,12 @@
                 <!-- Drop Highlight Indicator -->
                 <div id="dropIndicator" class="drop-indicator"></div>
 
-                <!-- Class blocks will be dynamically injected here by JS -->
+                <!-- Class blocks dynamically injected here -->
             </div>
         </div>
     </div>
 
+    <!-- Edit Class Modal Panel -->
     <div id="editClassPanel" class="fixed z-[100] bg-white rounded-xl border border-blue-200 shadow-2xl p-4 w-80 max-w-[90vw] hidden transition-opacity duration-150">
         <div class="flex justify-between items-center pb-2 mb-3 border-b border-gray-200">
             <h3 id="editingClassLabel" class="text-xs font-bold text-blue-900 uppercase truncate pr-2">Edit Block</h3>
@@ -660,7 +661,6 @@
         </div>
         
         <div class="max-h-[70vh] overflow-y-auto pr-1">
-            <!-- Text Content -->
             <div class="mb-3">
                 <label class="block text-xs text-gray-600 mb-1">Subject Name</label>
                 <input type="text" id="editSubjectName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
@@ -669,7 +669,6 @@
                 <input type="text" id="editRoomName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
             </div>
 
-            <!-- Background Appearance -->
             <div class="mb-3">
                 <label class="block text-xs text-gray-600 mb-1">Text Color (This Class Only)</label>
                 <div class="flex items-center gap-3 bg-gray-50 border border-gray-300 rounded p-1.5 mb-3 shadow-sm">
@@ -709,7 +708,6 @@
                 </div>
             </div>
 
-            <!-- Border Appearance -->
             <div class="mb-3 border-t border-gray-100 pt-3">
                 <label class="block text-xs text-gray-600 mb-1">Border Appearance</label>
                 <select id="editBorderType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
@@ -726,10 +724,8 @@
                     <input type="file" id="editClassBorderInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-200 hover:file:bg-blue-300 cursor-pointer">
                     <button type="button" id="clearEditClassBorder" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Border</button>
                 </div>
-                <p class="text-[10px] text-gray-500 mt-1 leading-tight">Colors and image borders neatly trace diagonal cut shapes.</p>
             </div>
             
-            <!-- Action Buttons -->
             <div class="mt-4 pt-3 border-t border-gray-200 flex justify-between items-center">
                 <button type="button" id="duplicateClassBtn" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-1.5 px-3 rounded transition-colors flex items-center gap-1">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M216,40H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V48A8,8,0,0,0,216,40Zm-56,168H48V96H160Zm48-48H176V96a8,8,0,0,0-8-8H96V56H208Z"></path></svg>
@@ -744,6 +740,7 @@
         </div>
     </div>
 
+    <!-- Image Cropper / Fit Modal -->
     <div id="imageEditorModal" class="hidden fixed inset-0 z-[1000] bg-black bg-opacity-75 flex items-center justify-center p-4">
         <div class="bg-white rounded-lg p-5 w-full max-w-md flex flex-col gap-4 shadow-xl">
             <h3 class="text-lg font-bold text-gray-800 border-b pb-2">Adjust Image</h3>
@@ -812,6 +809,43 @@
             headers: [], times: []
         };
 
+        function generateGridLines() {
+            const bgLines = document.getElementById('bgLines');
+            const vertLines = document.getElementById('vertLines');
+            if (!bgLines || !vertLines) return;
+            
+            bgLines.innerHTML = '';
+            vertLines.innerHTML = '';
+            
+            // Generate 30 horizontal half-hour lines
+            for (let i = 0; i < 30; i++) {
+                const line = document.createElement('div');
+                line.className = 'horizontal-line';
+                bgLines.appendChild(line);
+            }
+            
+            // Generate 6 vertical day column dividers
+            for (let i = 0; i < 6; i++) {
+                const line = document.createElement('div');
+                line.className = 'vertical-line';
+                vertLines.appendChild(line);
+            }
+
+            updateGridLinesStyle();
+        }
+
+        function updateGridLinesStyle() {
+            const color = document.getElementById('gridLinesColor')?.value || globalSettings.gridLinesColor;
+            const opacityVal = document.getElementById('gridLinesOpacity')?.value;
+            const opacity = opacityVal !== undefined ? opacityVal / 100 : globalSettings.gridLinesOpacity;
+            
+            globalSettings.gridLinesColor = color;
+            globalSettings.gridLinesOpacity = opacity;
+            
+            const rgba = hexToRgba(color, opacity);
+            document.documentElement.style.setProperty('--grid-line', rgba);
+        }
+
         const hexToRgba = (hex, opacity) => {
             if (!hex) return `rgba(0,0,0,${opacity})`;
             let r = 0, g = 0, b = 0;
@@ -865,9 +899,8 @@
         function findEarliestAvailableSlot(durationMinutes) {
             const durationRows = Math.round(durationMinutes / 30);
             const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            
-            const minRow = 2; // Row 2 = 07:00
-            const maxRow = 32; // Row 32 = 22:00
+            const minRow = 2;
+            const maxRow = 32;
             
             for (const day of days) {
                 for (let startRow = minRow; startRow <= maxRow - durationRows; startRow++) {
@@ -888,13 +921,11 @@
             return null;
         }
 
-        // Load saved API key on startup
         const savedApiKey = localStorage.getItem('gemini_api_key');
         if (savedApiKey) {
             document.getElementById('geminiApiKey').value = savedApiKey;
         }
 
-        // Toggle API Key Visibility
         document.getElementById('toggleKeyVisibility').addEventListener('click', function() {
             const keyInput = document.getElementById('geminiApiKey');
             if (keyInput.type === 'password') {
@@ -906,7 +937,6 @@
             }
         });
 
-        // Image Preview handler for Gemini upload
         document.getElementById('geminiImageInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             const previewContainer = document.getElementById('aiImagePreviewContainer');
@@ -925,7 +955,6 @@
             }
         });
 
-        // Helper: Convert File to Base64
         function fileToBase64(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -935,7 +964,6 @@
             });
         }
 
-        // Helper: Round time to nearest 30-minute interval on grid
         function normalizeToGridTime(timeStr) {
             if (!timeStr) return "08:00";
             let parts = timeStr.trim().split(':');
@@ -954,7 +982,6 @@
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         }
 
-        // Helper: Standardize Day Names
         function normalizeDayName(dayStr) {
             if (!dayStr) return 'Monday';
             const d = dayStr.trim().toLowerCase();
@@ -967,7 +994,6 @@
             return 'Monday';
         }
 
-        // AI Schedule Extraction Handler
         document.getElementById('aiExtractBtn').addEventListener('click', async function() {
             const apiKey = document.getElementById('geminiApiKey').value.trim();
             const fileInput = document.getElementById('geminiImageInput');
@@ -976,10 +1002,8 @@
             const btnText = document.getElementById('aiBtnText');
             const btnIcon = document.getElementById('aiBtnIcon');
 
-            // Save key locally
             if (apiKey) localStorage.setItem('gemini_api_key', apiKey);
 
-            // Validation
             if (!apiKey) {
                 statusMsg.className = 'text-xs mt-2 font-medium p-2 rounded bg-red-100 text-red-800 border border-red-200';
                 statusMsg.innerText = 'Please enter a valid Gemini API Key.';
@@ -996,7 +1020,6 @@
 
             const imageFile = fileInput.files[0];
 
-            // Set Loading UI State
             btn.disabled = true;
             btnText.innerText = 'Analyzing Schedule with Gemini...';
             btnIcon.innerHTML = `<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>`;
@@ -1013,34 +1036,27 @@
                 const promptText = `
                 Examine this class schedule / timetable image and extract all distinct class schedules into a JSON array.
                 For each class slot found, output an object with:
-                - "subject": string (e.g. course code or title, e.g. "DEVC 70" or "MATH 21")
-                - "room": string (e.g. room number or building, e.g. "CDC LR1", or "" if none)
-                - "day": string (must be full day name: "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", or "Saturday")
-                - "start": string (start time in 24-hour HH:MM format between 07:00 and 21:30, e.g. "08:00")
-                - "end": string (end time in 24-hour HH:MM format between 07:30 and 22:00, e.g. "10:00")
+                - "subject": string
+                - "room": string
+                - "day": string ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", or "Saturday")
+                - "start": string (24-hour HH:MM format between 07:00 and 21:30)
+                - "end": string (24-hour HH:MM format between 07:30 and 22:00)
 
                 Important Rules:
-                1. If a class occurs on multiple days (e.g., Tuesday & Thursday), return a separate entry for each day.
-                2. Return STRICTLY valid JSON as an array of objects. Do NOT include markdown code blocks or additional explanatory text outside the JSON.
+                1. If a class occurs on multiple days, return a separate entry for each day.
+                2. Return STRICTLY valid JSON as an array of objects.
                 `;
 
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
                 const requestBody = {
                     contents: [{
                         parts: [
                             { text: promptText },
-                            {
-                                inline_data: {
-                                    mime_type: mimeType,
-                                    data: base64Data
-                                }
-                            }
+                            { inline_data: { mime_type: mimeType, data: base64Data } }
                         ]
                     }],
-                    generationConfig: {
-                        response_mime_type: "application/json"
-                    }
+                    generationConfig: { response_mime_type: "application/json" }
                 };
 
                 const response = await fetch(endpoint, {
@@ -1061,7 +1077,6 @@
                     throw new Error("No response text received from Gemini API.");
                 }
 
-                // Clean potential Markdown wrap
                 let cleanJsonStr = rawResponseText.trim();
                 if (cleanJsonStr.startsWith('```json')) {
                     cleanJsonStr = cleanJsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
@@ -1075,7 +1090,6 @@
                     throw new Error("Gemini couldn't find any clear class schedules in the image.");
                 }
 
-                // Determine Import Mode
                 const importMode = document.querySelector('input[name="aiImportMode"]:checked').value;
                 if (importMode === 'replace') {
                     scheduleData = [];
@@ -1088,7 +1102,6 @@
                     let normEnd = normalizeToGridTime(item.end);
 
                     if (normStart >= normEnd) {
-                        // Fix fallback end time (at least 1 hour later)
                         let startH = parseInt(normStart.split(':')[0], 10);
                         normEnd = `${String(Math.min(startH + 1, 22)).padStart(2, '0')}:${normStart.split(':')[1]}`;
                     }
@@ -1144,10 +1157,6 @@
             document.getElementById('globalClassBgOpacityVal').innerText = `${Math.round(globalSettings.classBgOpacity * 100)}%`;
             document.getElementById('globalClassTextOpacity').value = Math.round(globalSettings.classTextOpacity * 100);
             document.getElementById('globalClassTextOpacityVal').innerText = `${Math.round(globalSettings.classTextOpacity * 100)}%`;
-            
-            document.getElementById('gridLinesColor').value = globalSettings.gridLinesColor;
-            document.getElementById('gridLinesOpacity').value = Math.round(globalSettings.gridLinesOpacity * 100);
-            document.getElementById('gridLinesOpacityVal').innerText = `${Math.round(globalSettings.gridLinesOpacity * 100)}%`;
 
             document.documentElement.style.setProperty('--main-font', globalSettings.font);
             document.documentElement.style.setProperty('--header-bg', globalSettings.headerBgColor);
@@ -1161,16 +1170,8 @@
             document.documentElement.style.setProperty('--class-bg-size', globalSettings.classBgFit || 'cover');
             document.documentElement.style.setProperty('--class-bg-repeat', (globalSettings.classBgFit === 'auto') ? 'repeat' : 'no-repeat');
 
+            updateGridLinesStyle();
             toggleGlobalContainers(false);
-
-            const headerCells = document.querySelectorAll('.header-cell');
-            const timeCells = document.querySelectorAll('.time-cell');
-            if (globalSettings.headers && globalSettings.headers.length) {
-                headerCells.forEach((el, i) => { if(globalSettings.headers[i]) el.innerText = globalSettings.headers[i]; });
-            }
-            if (globalSettings.times && globalSettings.times.length) {
-                timeCells.forEach((el, i) => { if(globalSettings.times[i]) el.innerText = globalSettings.times[i]; });
-            }
         }
 
         function updateBlockVisuals(id) {
@@ -1573,7 +1574,7 @@
 
         document.getElementById('globalScheduleBgColor').addEventListener('input', e => {
             globalSettings.scheduleBgColor = e.target.value;
-            if (globalSettings.classBgType === 'color') document.documentElement.style.setProperty('--grid-bg', e.target.value);
+            if (globalSettings.scheduleBgType === 'color') document.documentElement.style.setProperty('--grid-bg', e.target.value);
             saveData();
         });
         
@@ -1595,6 +1596,56 @@
         document.getElementById('globalClassBorderColor').addEventListener('input', e => {
             globalSettings.classBorderColor = e.target.value;
             scheduleData.forEach(item => updateBlockVisuals(item.id));
+            saveData();
+        });
+
+        document.getElementById('gridLinesColor').addEventListener('input', updateGridLinesStyle);
+        document.getElementById('gridLinesOpacity').addEventListener('input', e => {
+            document.getElementById('gridLinesOpacityVal').innerText = `${e.target.value}%`;
+            updateGridLinesStyle();
+        });
+
+        document.getElementById('globalFont').addEventListener('change', e => {
+            globalSettings.font = e.target.value;
+            document.documentElement.style.setProperty('--main-font', e.target.value);
+            saveData();
+        });
+
+        document.getElementById('headerBgColor').addEventListener('input', e => {
+            globalSettings.headerBgColor = e.target.value;
+            document.documentElement.style.setProperty('--header-bg', e.target.value);
+            saveData();
+        });
+
+        document.getElementById('headerTextColor').addEventListener('input', e => {
+            globalSettings.headerTextColor = e.target.value;
+            document.documentElement.style.setProperty('--header-text-color', e.target.value);
+            saveData();
+        });
+
+        document.getElementById('timeBgColor').addEventListener('input', e => {
+            globalSettings.timeBgColor = e.target.value;
+            document.documentElement.style.setProperty('--time-bg', e.target.value);
+            saveData();
+        });
+
+        document.getElementById('timeTextColor').addEventListener('input', e => {
+            globalSettings.timeTextColor = e.target.value;
+            document.documentElement.style.setProperty('--time-text-color', e.target.value);
+            saveData();
+        });
+
+        document.getElementById('globalClassTextColor').addEventListener('input', e => {
+            globalSettings.globalClassTextColor = e.target.value;
+            document.documentElement.style.setProperty('--class-text-color', hexToRgba(e.target.value, globalSettings.classTextOpacity));
+            saveData();
+        });
+
+        document.getElementById('globalClassTextOpacity').addEventListener('input', e => {
+            const opacity = e.target.value / 100;
+            globalSettings.classTextOpacity = opacity;
+            document.getElementById('globalClassTextOpacityVal').innerText = `${e.target.value}%`;
+            document.documentElement.style.setProperty('--class-text-color', hexToRgba(globalSettings.globalClassTextColor, opacity));
             saveData();
         });
 
@@ -1677,7 +1728,9 @@
         });
 
         function setupGlobalImageUpload(inputId, settingsKey, cssVar, isBorder, fitSettingsKey, fitCssVar) {
-            document.getElementById(inputId).addEventListener('change', e => {
+            const inputEl = document.getElementById(inputId);
+            if (!inputEl) return;
+            inputEl.addEventListener('change', e => {
                 const file = e.target.files[0];
                 if (file) {
                     openImageEditor(file, isBorder, (dataUrl, fitVal) => {
@@ -1690,7 +1743,8 @@
                                 document.documentElement.style.setProperty(fitCssVar + '-repeat', fitVal === 'auto' ? 'repeat' : 'no-repeat');
                             }
                         }
-                        document.getElementById(inputId).nextElementSibling.classList.remove('hidden');
+                        const clearBtn = inputEl.nextElementSibling;
+                        if (clearBtn) clearBtn.classList.remove('hidden');
                         
                         scheduleData.forEach(item => updateBlockVisuals(item.id));
                         saveData();
@@ -1698,338 +1752,242 @@
                 }
                 e.target.value = '';
             });
-            document.getElementById(inputId).nextElementSibling.addEventListener('click', function() {
-                globalSettings[settingsKey] = null;
-                if (!isBorder) {
-                    document.documentElement.style.removeProperty(cssVar);
-                    if (fitSettingsKey) {
-                        globalSettings[fitSettingsKey] = 'cover';
-                        document.documentElement.style.setProperty(fitCssVar, 'cover');
-                        document.documentElement.style.setProperty(fitCssVar + '-repeat', 'no-repeat');
+
+            const clearBtn = inputEl.nextElementSibling;
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    globalSettings[settingsKey] = null;
+                    if (!isBorder) {
+                        document.documentElement.style.removeProperty(cssVar);
+                        if (fitSettingsKey) {
+                            globalSettings[fitSettingsKey] = 'cover';
+                            document.documentElement.style.setProperty(fitCssVar, 'cover');
+                            document.documentElement.style.setProperty(fitCssVar + '-repeat', 'no-repeat');
+                        }
                     }
-                }
-                document.getElementById(inputId).value = '';
-                this.classList.add('hidden');
-                
-                scheduleData.forEach(item => updateBlockVisuals(item.id));
-                saveData();
-            });
+                    inputEl.value = '';
+                    this.classList.add('hidden');
+                    
+                    scheduleData.forEach(item => updateBlockVisuals(item.id));
+                    saveData();
+                });
+            }
         }
+
         setupGlobalImageUpload('scheduleBgInput', 'scheduleBgImage', '--schedule-bg-image', false, 'scheduleBgFit', '--schedule-bg-size');
         setupGlobalImageUpload('classBgInput', 'classBgImage', '--class-bg-image', false, 'classBgFit', '--class-bg-size');
         setupGlobalImageUpload('classBorderInput', 'classBorderImage', '--class-border-image', true);
 
-        const attachFontColor = (id, prop, cssVar) => {
-            document.getElementById(id).addEventListener('input', e => {
-                globalSettings[prop] = e.target.value;
-                document.documentElement.style.setProperty(cssVar, e.target.value);
-                saveData();
-            });
-        };
-        attachFontColor('globalFont', 'font', '--main-font');
-        attachFontColor('headerBgColor', 'headerBgColor', '--header-bg');
-        attachFontColor('headerTextColor', 'headerTextColor', '--header-text-color');
-        attachFontColor('timeBgColor', 'timeBgColor', '--time-bg');
-        attachFontColor('timeTextColor', 'timeTextColor', '--time-text-color');
-        
-        document.getElementById('globalClassTextColor').addEventListener('input', e => {
-            globalSettings.globalClassTextColor = e.target.value;
-            document.documentElement.style.setProperty('--class-text-color', hexToRgba(e.target.value, globalSettings.classTextOpacity ?? 1));
-            saveData();
+        let activeEditId = null;
+
+        function openEditPanel(id) {
+            activeEditId = id;
+            const item = scheduleData.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('editSubjectName').value = item.subject;
+            document.getElementById('editRoomName').value = item.room || '';
+            document.getElementById('editingClassLabel').innerText = `Edit: ${item.subject}`;
+
+            document.getElementById('editTextColor').value = item.textColor || globalSettings.globalClassTextColor;
+            const textOp = item.textOpacity !== undefined ? item.textOpacity : 1.0;
+            document.getElementById('editClassTextOpacity').value = Math.round(textOp * 100);
+            document.getElementById('editClassTextOpacityVal').innerText = `${Math.round(textOp * 100)}%`;
+
+            document.getElementById('editBgType').value = item.bgType || 'default';
+            document.getElementById('editBgColor').value = item.bgColor || globalSettings.classBgColor;
+            const bgOp = item.bgOpacity !== undefined ? item.bgOpacity : 1.0;
+            document.getElementById('editClassBgOpacity').value = Math.round(bgOp * 100);
+            document.getElementById('editClassBgOpacityVal').innerText = `${Math.round(bgOp * 100)}%`;
+
+            document.getElementById('editBorderType').value = item.borderType || 'default';
+            document.getElementById('editBorderColor').value = item.borderColor || globalSettings.classBorderColor;
+
+            toggleEditPanelContainers();
+
+            const editPanel = document.getElementById('editClassPanel');
+            editPanel.classList.remove('hidden');
+        }
+
+        function toggleEditPanelContainers() {
+            const bgType = document.getElementById('editBgType').value;
+            document.getElementById('editBgColorContainer').classList.toggle('hidden', bgType !== 'color');
+            document.getElementById('editBgImageContainer').classList.toggle('hidden', bgType !== 'image');
+
+            const borderType = document.getElementById('editBorderType').value;
+            document.getElementById('editBorderColorContainer').classList.toggle('hidden', borderType !== 'color');
+            document.getElementById('editBorderImageContainer').classList.toggle('hidden', borderType !== 'image');
+        }
+
+        document.getElementById('closeEditPanel').addEventListener('click', () => {
+            document.getElementById('editClassPanel').classList.add('hidden');
+            activeEditId = null;
         });
 
-        document.getElementById('globalClassTextOpacity').addEventListener('input', e => {
+        document.getElementById('editSubjectName').addEventListener('input', e => {
+            if (!activeEditId) return;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.subject = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
+        });
+
+        document.getElementById('editRoomName').addEventListener('input', e => {
+            if (!activeEditId) return;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.room = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
+        });
+
+        document.getElementById('editBgType').addEventListener('change', e => {
+            if (!activeEditId) return;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.bgType = e.target.value; toggleEditPanelContainers(); updateBlockVisuals(activeEditId); saveData(); }
+        });
+
+        document.getElementById('editBgColor').addEventListener('input', e => {
+            if (!activeEditId) return;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.bgColor = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
+        });
+
+        document.getElementById('editClassBgOpacity').addEventListener('input', e => {
+            if (!activeEditId) return;
             const opacity = e.target.value / 100;
-            globalSettings.classTextOpacity = opacity;
-            document.getElementById('globalClassTextOpacityVal').innerText = `${e.target.value}%`;
-            document.documentElement.style.setProperty('--class-text-color', hexToRgba(globalSettings.globalClassTextColor, opacity));
-            saveData();
+            document.getElementById('editClassBgOpacityVal').innerText = `${e.target.value}%`;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.bgOpacity = opacity; updateBlockVisuals(activeEditId); saveData(); }
         });
 
-        document.getElementById('gridLinesColor').addEventListener('input', e => {
-            globalSettings.gridLinesColor = e.target.value;
-            document.documentElement.style.setProperty('--grid-line', hexToRgba(e.target.value, globalSettings.gridLinesOpacity));
-            saveData();
+        document.getElementById('editBorderType').addEventListener('change', e => {
+            if (!activeEditId) return;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.borderType = e.target.value; toggleEditPanelContainers(); updateBlockVisuals(activeEditId); saveData(); }
         });
 
-        document.getElementById('gridLinesOpacity').addEventListener('input', e => {
-            const opacityValue = e.target.value / 100;
-            globalSettings.gridLinesOpacity = opacityValue;
-            document.getElementById('gridLinesOpacityVal').innerText = `${e.target.value}%`;
-            document.documentElement.style.setProperty('--grid-line', hexToRgba(globalSettings.gridLinesColor, opacityValue));
-            saveData();
+        document.getElementById('editBorderColor').addEventListener('input', e => {
+            if (!activeEditId) return;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.borderColor = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
         });
 
-        const saveGridText = () => {
-            globalSettings.headers = Array.from(document.querySelectorAll('.header-cell')).map(el => el.innerText);
-            globalSettings.times = Array.from(document.querySelectorAll('.time-cell')).map(el => el.innerText);
+        document.getElementById('editTextColor').addEventListener('input', e => {
+            if (!activeEditId) return;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.textColor = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
+        });
+
+        document.getElementById('editClassTextOpacity').addEventListener('input', e => {
+            if (!activeEditId) return;
+            const opacity = e.target.value / 100;
+            document.getElementById('editClassTextOpacityVal').innerText = `${e.target.value}%`;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (item) { item.textOpacity = opacity; updateBlockVisuals(activeEditId); saveData(); }
+        });
+
+        document.getElementById('duplicateClassBtn').addEventListener('click', () => {
+            if (!activeEditId) return;
+            const item = scheduleData.find(i => i.id === activeEditId);
+            if (!item) return;
+
+            const durationMins = (timeToRowCoord(item.end) - timeToRowCoord(item.start)) * 30;
+            const availableSlot = findEarliestAvailableSlot(durationMins);
+
+            if (!availableSlot) {
+                const err = document.getElementById('editPanelError');
+                err.innerText = "No available time slot found to place duplicate!";
+                err.classList.remove('hidden');
+                setTimeout(() => err.classList.add('hidden'), 3000);
+                return;
+            }
+
+            const newItem = JSON.parse(JSON.stringify(item));
+            newItem.id = Date.now();
+            newItem.day = availableSlot.day;
+            newItem.start = availableSlot.start;
+            newItem.end = availableSlot.end;
+
+            scheduleData.push(newItem);
+            renderSchedule(newItem.id);
             saveData();
-        };
-        document.querySelectorAll('.header-cell, .time-cell').forEach(el => el.addEventListener('input', saveGridText));
+            document.getElementById('editClassPanel').classList.add('hidden');
+            activeEditId = null;
+        });
+
+        document.getElementById('deleteEditClassBtn').addEventListener('click', () => {
+            if (!activeEditId) return;
+            scheduleData = scheduleData.filter(i => i.id !== activeEditId);
+            renderSchedule();
+            saveData();
+            document.getElementById('editClassPanel').classList.add('hidden');
+            activeEditId = null;
+        });
 
         document.getElementById('exportBtn').addEventListener('click', () => {
-            saveGridText();
-            const data = { scheduleData, globalSettings };
-            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'my_class_schedule.json';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        });
-
-        document.getElementById('exportPngBtn').addEventListener('click', function() {
-            const btn = this;
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...`;
-            btn.disabled = true;
-
-            const container = document.getElementById('scheduleWrapper');
-            
-            const editableElements = container.querySelectorAll('[contenteditable="true"]');
-            editableElements.forEach(el => el.removeAttribute('contenteditable'));
-
-            htmlToImage.toPng(container, {
-                quality: 1.0,
-                pixelRatio: 2,
-                width: container.scrollWidth,
-                height: container.scrollHeight,
-                style: {
-                    margin: '0',
-                    transform: 'none'
-                }
-            })
-            .then(function (dataUrl) {
-                editableElements.forEach(el => el.setAttribute('contenteditable', 'true'));
-
-                const downloadLink = document.createElement("a");
-                downloadLink.href = dataUrl;
-                downloadLink.download = "class_schedule.png";
-                document.body.appendChild(downloadLink); 
-                downloadLink.click(); 
-                document.body.removeChild(downloadLink);
-                
-                btn.innerHTML = originalHtml; 
-                btn.disabled = false;
-            })
-            .catch(function (error) {
-                console.error('Error exporting PNG:', error);
-                editableElements.forEach(el => el.setAttribute('contenteditable', 'true'));
-                btn.innerHTML = originalHtml; 
-                btn.disabled = false;
-            });
+            const dataToSave = {
+                scheduleData,
+                globalSettings
+            };
+            const jsonString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToSave, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", jsonString);
+            downloadAnchor.setAttribute("download", `class_schedule_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
         });
 
         document.getElementById('importInput').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
+
             const reader = new FileReader();
-            reader.onload = (event) => {
+            reader.onload = (evt) => {
                 try {
-                    const data = JSON.parse(event.target.result);
-                    if (data.scheduleData) scheduleData = data.scheduleData;
-                    if (data.globalSettings) {
-                        globalSettings = Object.assign({}, globalSettings, data.globalSettings);
-                        applyGlobalSettings();
+                    const parsed = JSON.parse(evt.target.result);
+                    if (parsed.scheduleData) {
+                        scheduleData = parsed.scheduleData;
+                        if (parsed.globalSettings) {
+                            globalSettings = { ...globalSettings, ...parsed.globalSettings };
+                            applyGlobalSettings();
+                        }
+                        renderSchedule();
+                        saveData();
                     }
-                    renderSchedule();
-                } catch (err) { console.error("Invalid format", err); }
+                } catch (err) {
+                    alert("Invalid JSON file format.");
+                }
             };
             reader.readAsText(file);
             e.target.value = '';
         });
 
-        let currentlyEditingId = null;
+        document.getElementById('exportPngBtn').addEventListener('click', () => {
+            const node = document.getElementById('scheduleWrapper');
+            const btn = document.getElementById('exportPngBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "Generating PNG...";
+            btn.disabled = true;
 
-        function openEditPanel(id) {
-            currentlyEditingId = id;
-            const item = scheduleData.find(i => i.id === id);
-            if (!item) return;
-
-            document.getElementById('editingClassLabel').innerText = `Edit: ${item.subject} (${item.day})`;
-            const editPanel = document.getElementById('editClassPanel');
-            editPanel.classList.remove('hidden');
-
-            const wrapper = document.querySelector(`.class-block-wrapper[data-id="${id}"]`);
-            if (wrapper) {
-                const rect = wrapper.getBoundingClientRect();
-                const panelWidth = 320; 
-                const panelHeight = Math.min(editPanel.offsetHeight || 380, window.innerHeight * 0.8);
-
-                let left = rect.right + 12, top = rect.top;
-                if (left + panelWidth > window.innerWidth - 12) left = rect.left - panelWidth - 12;
-                if (left < 12) left = Math.max(12, (window.innerWidth - panelWidth) / 2);
-                if (top + panelHeight > window.innerHeight - 12) top = Math.max(12, window.innerHeight - panelHeight - 12);
-                if (top < 12) top = 12;
-                editPanel.style.left = `${left}px`; editPanel.style.top = `${top}px`;
-            }
-            
-            document.getElementById('editSubjectName').value = item.subject;
-            document.getElementById('editRoomName').value = item.room;
-            document.getElementById('editBgType').value = item.bgType || (item.customBg ? 'image' : 'default');
-            document.getElementById('editBgColor').value = item.bgColor || '#015F43';
-            document.getElementById('editClassBgInput').value = '';
-            document.getElementById('editBorderType').value = item.borderType || (item.customBorder ? 'image' : 'default');
-            document.getElementById('editBorderColor').value = item.borderColor || '#ffffff';
-            document.getElementById('editClassBorderInput').value = '';
-            document.getElementById('editTextColor').value = item.textColor || getComputedStyle(document.documentElement).getPropertyValue('--class-text-color').trim().substring(0,7) || '#ffffff';
-
-            const textOp = item.textOpacity !== undefined ? item.textOpacity * 100 : 100;
-            document.getElementById('editClassTextOpacity').value = textOp;
-            document.getElementById('editClassTextOpacityVal').innerText = `${textOp}%`;
-
-            const bgOp = item.bgOpacity !== undefined ? item.bgOpacity * 100 : 100;
-            document.getElementById('editClassBgOpacity').value = bgOp;
-            document.getElementById('editClassBgOpacityVal').innerText = `${bgOp}%`;
-
-            toggleEditContainers();
-            document.getElementById('clearEditClassBg').classList.toggle('hidden', !item.customBg);
-            document.getElementById('clearEditClassBorder').classList.toggle('hidden', !item.customBorder);
-            const errEl = document.getElementById('editPanelError'); if (errEl) errEl.classList.add('hidden');
-        }
-
-        document.addEventListener('pointerdown', (e) => {
-            const editPanel = document.getElementById('editClassPanel');
-            if (!editPanel || editPanel.classList.contains('hidden')) return;
-            if (!editPanel.contains(e.target) && !e.target.closest('.class-block-wrapper')) {
-                editPanel.classList.add('hidden');
-                currentlyEditingId = null;
-            }
-        });
-
-        function toggleEditContainers() {
-            document.getElementById('editBgColorContainer').classList.toggle('hidden', document.getElementById('editBgType').value !== 'color');
-            document.getElementById('editBgImageContainer').classList.toggle('hidden', document.getElementById('editBgType').value !== 'image');
-            document.getElementById('editBorderColorContainer').classList.toggle('hidden', document.getElementById('editBorderType').value !== 'color');
-            document.getElementById('editBorderImageContainer').classList.toggle('hidden', document.getElementById('editBorderType').value !== 'image');
-        }
-
-        document.getElementById('editSubjectName').addEventListener('input', e => {
-            if (!currentlyEditingId) return;
-            const item = scheduleData.find(i => i.id === currentlyEditingId);
-            item.subject = e.target.value;
-            document.getElementById('editingClassLabel').innerText = `Editing: ${item.subject} (${item.day})`;
-            updateBlockVisuals(currentlyEditingId); saveData();
-        });
-
-        document.getElementById('editRoomName').addEventListener('input', e => {
-            if (!currentlyEditingId) return;
-            scheduleData.find(i => i.id === currentlyEditingId).room = e.target.value;
-            updateBlockVisuals(currentlyEditingId); saveData();
-        });
-
-        ['editBgType', 'editBorderType'].forEach(id => {
-            document.getElementById(id).addEventListener('change', e => {
-                if (!currentlyEditingId) return;
-                const item = scheduleData.find(i => i.id === currentlyEditingId);
-                if(id === 'editBgType') item.bgType = e.target.value;
-                if(id === 'editBorderType') item.borderType = e.target.value;
-                toggleEditContainers(); updateBlockVisuals(currentlyEditingId); saveData();
-            });
-        });
-
-        document.getElementById('editBgColor').addEventListener('input', e => {
-            if (!currentlyEditingId) return;
-            const item = scheduleData.find(i => i.id === currentlyEditingId);
-            item.bgColor = e.target.value; item.bgType = 'color';
-            updateBlockVisuals(currentlyEditingId); saveData();
-        });
-
-        document.getElementById('editClassBgOpacity').addEventListener('input', e => {
-            if (!currentlyEditingId) return;
-            const item = scheduleData.find(i => i.id === currentlyEditingId);
-            item.bgOpacity = e.target.value / 100;
-            document.getElementById('editClassBgOpacityVal').innerText = `${e.target.value}%`;
-            updateBlockVisuals(currentlyEditingId); saveData();
-        });
-
-        document.getElementById('editBorderColor').addEventListener('input', e => {
-            if (!currentlyEditingId) return;
-            const item = scheduleData.find(i => i.id === currentlyEditingId);
-            item.borderColor = e.target.value; item.borderType = 'color';
-            updateBlockVisuals(currentlyEditingId); saveData();
-        });
-
-        document.getElementById('editTextColor').addEventListener('input', e => {
-            if (!currentlyEditingId) return;
-            scheduleData.find(i => i.id === currentlyEditingId).textColor = e.target.value;
-            updateBlockVisuals(currentlyEditingId); saveData();
-        });
-
-        document.getElementById('editClassTextOpacity').addEventListener('input', e => {
-            if (!currentlyEditingId) return;
-            scheduleData.find(i => i.id === currentlyEditingId).textOpacity = e.target.value / 100;
-            document.getElementById('editClassTextOpacityVal').innerText = `${e.target.value}%`;
-            updateBlockVisuals(currentlyEditingId); saveData();
-        });
-
-        document.getElementById('deleteEditClassBtn').addEventListener('click', () => {
-            if (!currentlyEditingId) return;
-            scheduleData = scheduleData.filter(item => item.id !== currentlyEditingId);
-            renderSchedule(); saveData();
-            document.getElementById('editClassPanel').classList.add('hidden');
-            currentlyEditingId = null;
-        });
-
-        document.getElementById('duplicateClassBtn').addEventListener('click', () => {
-            if (!currentlyEditingId) return;
-            const originalItem = scheduleData.find(i => i.id === currentlyEditingId);
-            if (!originalItem) return;
-            const startRow = timeToRowCoord(originalItem.start);
-            const endRow = timeToRowCoord(originalItem.end);
-            const durationMins = (endRow - startRow) * 30;
-            const availableSlot = findEarliestAvailableSlot(durationMins);
-            if (!availableSlot) {
-                const errEl = document.getElementById('editPanelError');
-                errEl.innerText = "No available slot found for duplication.";
-                errEl.classList.remove('hidden'); setTimeout(() => errEl.classList.add('hidden'), 3000);
-                return;
-            }
-            const newId = Date.now();
-            const duplicatedItem = { ...originalItem, id: newId, day: availableSlot.day, start: availableSlot.start, end: availableSlot.end };
-            scheduleData.push(duplicatedItem);
-            renderSchedule(newId); saveData();
-            document.getElementById('editClassPanel').classList.add('hidden');
-            currentlyEditingId = null;
-        });
-
-        document.getElementById('closeEditPanel').addEventListener('click', () => {
-            currentlyEditingId = null; document.getElementById('editClassPanel').classList.add('hidden');
-        });
-
-        function setupSpecificImageUpload(inputId, dataKey, clearBtnId) {
-            document.getElementById(inputId).addEventListener('change', e => {
-                const file = e.target.files[0];
-                if (!currentlyEditingId || !file) return;
-                openImageEditor(file, (dataKey === 'customBorder'), (dataUrl, fitVal) => {
-                    const item = scheduleData.find(i => i.id === currentlyEditingId);
-                    item[dataKey] = dataUrl;
-                    if (dataKey === 'customBg') { item.bgType = 'image'; item.customBgFit = fitVal; }
-                    if (dataKey === 'customBorder') item.borderType = 'image';
-                    updateBlockVisuals(currentlyEditingId);
-                    document.getElementById(clearBtnId).classList.remove('hidden');
-                    saveData();
+            htmlToImage.toPng(node, { quality: 0.95, pixelRatio: 2 })
+                .then(dataUrl => {
+                    const link = document.createElement('a');
+                    link.download = `schedule_${new Date().toISOString().slice(0,10)}.png`;
+                    link.href = dataUrl;
+                    link.click();
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                })
+                .catch(err => {
+                    console.error("Export error:", err);
+                    alert("Failed to export image. Please try again.");
+                    btn.innerText = originalText;
+                    btn.disabled = false;
                 });
-                e.target.value = '';
-            });
-            document.getElementById(clearBtnId).addEventListener('click', function() {
-                if (!currentlyEditingId) return;
-                const item = scheduleData.find(i => i.id === currentlyEditingId);
-                item[dataKey] = null;
-                if (dataKey === 'customBg') { item.bgType = 'default'; item.customBgFit = 'cover'; document.getElementById('editBgType').value = 'default'; }
-                if (dataKey === 'customBorder') { item.borderType = 'default'; document.getElementById('editBorderType').value = 'default'; }
-                toggleEditContainers(); updateBlockVisuals(currentlyEditingId);
-                document.getElementById(clearBtnId).classList.add('hidden');
-                saveData();
-            });
-        }
-        setupSpecificImageUpload('editClassBgInput', 'customBg', 'clearEditClassBg');
-        setupSpecificImageUpload('editClassBorderInput', 'customBorder', 'clearEditClassBorder');
+        });
 
-        window.onload = function() {
-            renderSchedule();
+        window.addEventListener('DOMContentLoaded', () => {
+            generateGridLines();
             applyGlobalSettings();
-        };
+            renderSchedule();
+        });
     </script>
 </body>
 </html>
