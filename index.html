@@ -175,7 +175,7 @@
         .class-block-wrapper {
             position: relative;
             z-index: 5;
-            transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.2s, padding 0.2s ease, background-color 0.2s ease;
+            transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.2s, padding 0.2s ease;
             cursor: grab;
             touch-action: none;
             box-sizing: border-box;
@@ -233,7 +233,7 @@
             line-height: 1.2;
             width: 100%;
             height: 100%;
-            transition: clip-path 0.2s ease, padding 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+            transition: clip-path 0.2s ease, padding 0.2s ease;
         }
 
         .class-block-inner span {
@@ -1602,11 +1602,17 @@
             }
         });
 
-        document.getElementById('editClassTextOpacity').addEventListener('input', e => {
+       document.getElementById('editClassTextOpacity').addEventListener('input', e => {
             if (!activeEditingId) return;
             const item = scheduleData.find(i => i.id === activeEditingId);
             if (item) {
                 item.textOpacity = e.target.value / 100;
+                
+                // NEW: Ensure the text color is saved so the opacity actually applies
+                if (!item.textColor) {
+                    item.textColor = document.getElementById('editTextColor').value;
+                }
+                
                 document.getElementById('editClassTextOpacityVal').innerText = `${e.target.value}%`;
                 updateBlockVisuals(activeEditingId);
                 saveData();
@@ -1618,6 +1624,12 @@
             const item = scheduleData.find(i => i.id === activeEditingId);
             if (item) {
                 item.bgType = e.target.value;
+                
+                // NEW: If switched to solid color, save the color immediately so the slider works
+                if (item.bgType === 'color' && !item.bgColor) {
+                    item.bgColor = document.getElementById('editBgColor').value;
+                }
+                
                 toggleEditPanelContainers();
                 updateBlockVisuals(activeEditingId);
                 saveData();
@@ -1639,6 +1651,12 @@
             const item = scheduleData.find(i => i.id === activeEditingId);
             if (item) {
                 item.bgOpacity = e.target.value / 100;
+                
+                // NEW: Ensure the background color is saved so the opacity actually applies
+                if (!item.bgColor) {
+                    item.bgColor = document.getElementById('editBgColor').value;
+                }
+                
                 document.getElementById('editClassBgOpacityVal').innerText = `${e.target.value}%`;
                 updateBlockVisuals(activeEditingId);
                 saveData();
