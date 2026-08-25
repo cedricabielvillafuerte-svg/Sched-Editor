@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Class Schedule with AI Auto-Import</title>
+    <title>Class Schedule Customizer ni Cedric</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
     <style>
@@ -206,6 +206,14 @@
             opacity: 0.75;
         }
 
+        /* Active highlight ring when block is selected for editing */
+        .class-block-wrapper.editing-active {
+            z-index: 90 !important;
+            outline: 3px solid #3b82f6;
+            outline-offset: -1px;
+            filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.6));
+        }
+
         .class-block-wrapper.just-added {
             animation: pulseHighlight 1.5s ease-out;
         }
@@ -278,6 +286,29 @@
             background-size: 20px 20px;
             background-position: 0 0, 10px 10px;
         }
+
+        /* Floating Edit Panel Pointer Arrow */
+        .floating-arrow {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border: 1px solid #bfdbfe;
+            transform: rotate(45deg);
+            z-index: -1;
+        }
+        .floating-arrow.arrow-left {
+            left: -6px;
+            top: 24px;
+            border-right: none;
+            border-top: none;
+        }
+        .floating-arrow.arrow-right {
+            right: -6px;
+            top: 24px;
+            border-left: none;
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
@@ -299,7 +330,7 @@
                     <button type="button" class="toggle-section-btn w-full flex justify-between items-center p-3 bg-purple-100 hover:bg-purple-200 transition-colors">
                         <span class="font-bold text-purple-900 text-sm uppercase flex items-center gap-1.5">
                             <svg class="w-4 h-4 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                            ✨ AI Auto-Import (Gemini)
+                            AI Auto-Import 
                         </span>
                         <svg class="chevron w-4 h-4 text-purple-600 transition-transform duration-200 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
@@ -653,90 +684,98 @@
         </div>
     </div>
 
-    <!-- Edit Class Modal Panel -->
-    <div id="editClassPanel" class="fixed z-[100] bg-white rounded-xl border border-blue-200 shadow-2xl p-4 w-80 max-w-[90vw] hidden transition-opacity duration-150">
-        <div class="flex justify-between items-center pb-2 mb-3 border-b border-gray-200">
-            <h3 id="editingClassLabel" class="text-xs font-bold text-blue-900 uppercase truncate pr-2">Edit Block</h3>
-            <button type="button" id="closeEditPanel" class="text-gray-400 hover:text-gray-700 text-xl leading-none font-bold" title="Close Panel">&times;</button>
-        </div>
-        
-        <div class="max-h-[70vh] overflow-y-auto pr-1">
-            <div class="mb-3">
-                <label class="block text-xs text-gray-600 mb-1">Subject Name</label>
-                <input type="text" id="editSubjectName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
-                
-                <label class="block text-xs text-gray-600 mb-1">Room / Location</label>
-                <input type="text" id="editRoomName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
-            </div>
+    <!-- Floating Edit Class Panel (No heavy full-screen blocking overlay, floats directly beside target block) -->
+    <div id="editClassPanel" class="fixed inset-0 z-[100] hidden pointer-events-none">
+        <!-- Transparent click-outside listener backdrop -->
+        <div id="editPanelBackdrop" class="absolute inset-0 bg-black/10 backdrop-blur-[1px] pointer-events-auto"></div>
 
-            <div class="mb-3">
-                <label class="block text-xs text-gray-600 mb-1">Text Color (This Class Only)</label>
-                <div class="flex items-center gap-3 bg-gray-50 border border-gray-300 rounded p-1.5 mb-3 shadow-sm">
-                    <input type="color" id="editTextColor" value="#ffffff" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm">
-                    <div class="flex-1 flex flex-col pr-2">
-                        <div class="flex justify-between items-center mb-1.5">
-                            <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Opacity</span>
-                            <span id="editClassTextOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">100%</span>
-                        </div>
-                        <input type="range" id="editClassTextOpacity" min="0" max="100" value="100" class="w-full accent-blue-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
-                    </div>
+        <!-- Floating Popover Card -->
+        <div id="editPanelCard" class="edit-card absolute pointer-events-auto bg-white rounded-xl border border-blue-200 shadow-2xl p-4 w-80 max-w-[calc(100vw-32px)] transition-all duration-150 relative z-10">
+            <div id="panelArrow" class="floating-arrow hidden"></div>
+            
+            <div class="flex justify-between items-center pb-2 mb-3 border-b border-gray-200">
+                <h3 id="editingClassLabel" class="text-xs font-bold text-blue-900 uppercase truncate pr-2">Edit Block</h3>
+                <button type="button" id="closeEditPanel" class="text-gray-400 hover:text-gray-700 text-xl leading-none font-bold" title="Close Panel">&times;</button>
+            </div>
+            
+            <div class="max-h-[65vh] overflow-y-auto pr-1">
+                <div class="mb-3">
+                    <label class="block text-xs text-gray-600 mb-1">Subject Name</label>
+                    <input type="text" id="editSubjectName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
+                    
+                    <label class="block text-xs text-gray-600 mb-1">Room / Location</label>
+                    <input type="text" id="editRoomName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
                 </div>
 
-                <label class="block text-xs text-gray-600 mb-1 mt-2 border-t border-gray-100 pt-2">Background Appearance</label>
-                <select id="editBgType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
-                    <option value="default">Default</option>
-                    <option value="color">Solid Color</option>
-                    <option value="image">Custom Image</option>
-                </select>
-
-                <div id="editBgColorContainer" class="hidden">
-                    <div class="flex items-center gap-3 bg-gray-50 border border-gray-300 rounded p-1.5 mb-2 shadow-sm">
-                        <input type="color" id="editBgColor" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm">
+                <div class="mb-3">
+                    <label class="block text-xs text-gray-600 mb-1">Text Color (This Class Only)</label>
+                    <div class="flex items-center gap-3 bg-gray-50 border border-gray-300 rounded p-1.5 mb-3 shadow-sm">
+                        <input type="color" id="editTextColor" value="#ffffff" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm">
                         <div class="flex-1 flex flex-col pr-2">
                             <div class="flex justify-between items-center mb-1.5">
                                 <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Opacity</span>
-                                <span id="editClassBgOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">100%</span>
+                                <span id="editClassTextOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">100%</span>
                             </div>
-                            <input type="range" id="editClassBgOpacity" min="0" max="100" value="100" class="w-full accent-blue-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
+                            <input type="range" id="editClassTextOpacity" min="0" max="100" value="100" class="w-full accent-blue-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
                         </div>
+                    </div>
+
+                    <label class="block text-xs text-gray-600 mb-1 mt-2 border-t border-gray-100 pt-2">Background Appearance</label>
+                    <select id="editBgType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
+                        <option value="default">Default</option>
+                        <option value="color">Solid Color</option>
+                        <option value="image">Custom Image</option>
+                    </select>
+
+                    <div id="editBgColorContainer" class="hidden">
+                        <div class="flex items-center gap-3 bg-gray-50 border border-gray-300 rounded p-1.5 mb-2 shadow-sm">
+                            <input type="color" id="editBgColor" class="w-9 h-9 cursor-pointer rounded border-0 p-0 shrink-0 shadow-sm">
+                            <div class="flex-1 flex flex-col pr-2">
+                                <div class="flex justify-between items-center mb-1.5">
+                                    <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Opacity</span>
+                                    <span id="editClassBgOpacityVal" class="text-[10px] text-gray-700 font-bold bg-gray-100 px-1 rounded">100%</span>
+                                </div>
+                                <input type="range" id="editClassBgOpacity" min="0" max="100" value="100" class="w-full accent-blue-600 cursor-pointer h-1 bg-gray-200 rounded-lg">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="editBgImageContainer" class="hidden">
+                        <input type="file" id="editClassBgInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-200 hover:file:bg-blue-300 cursor-pointer">
+                        <button type="button" id="clearEditClassBg" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Background</button>
                     </div>
                 </div>
 
-                <div id="editBgImageContainer" class="hidden">
-                    <input type="file" id="editClassBgInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-200 hover:file:bg-blue-300 cursor-pointer">
-                    <button type="button" id="clearEditClassBg" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Background</button>
-                </div>
-            </div>
+                <div class="mb-3 border-t border-gray-100 pt-3">
+                    <label class="block text-xs text-gray-600 mb-1">Border Appearance</label>
+                    <select id="editBorderType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
+                        <option value="default">Default</option>
+                        <option value="color">Solid Color</option>
+                        <option value="image">Custom Image</option>
+                    </select>
 
-            <div class="mb-3 border-t border-gray-100 pt-3">
-                <label class="block text-xs text-gray-600 mb-1">Border Appearance</label>
-                <select id="editBorderType" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
-                    <option value="default">Default</option>
-                    <option value="color">Solid Color</option>
-                    <option value="image">Custom Image</option>
-                </select>
+                    <div id="editBorderColorContainer" class="hidden">
+                        <input type="color" id="editBorderColor" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                    </div>
 
-                <div id="editBorderColorContainer" class="hidden">
-                    <input type="color" id="editBorderColor" class="w-full h-8 cursor-pointer rounded border border-gray-300 p-0">
+                    <div id="editBorderImageContainer" class="hidden">
+                        <input type="file" id="editClassBorderInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-200 hover:file:bg-blue-300 cursor-pointer">
+                        <button type="button" id="clearEditClassBorder" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Border</button>
+                    </div>
                 </div>
-
-                <div id="editBorderImageContainer" class="hidden">
-                    <input type="file" id="editClassBorderInput" accept="image/*" class="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-200 hover:file:bg-blue-300 cursor-pointer">
-                    <button type="button" id="clearEditClassBorder" class="mt-1 text-xs text-red-500 hidden hover:underline">Clear Border</button>
+                
+                <div class="mt-4 pt-3 border-t border-gray-200 flex justify-between items-center">
+                    <button type="button" id="duplicateClassBtn" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-1.5 px-3 rounded transition-colors flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M216,40H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V48A8,8,0,0,0,216,40Zm-56,168H48V96H160Zm48-48H176V96a8,8,0,0,0-8-8H96V56H208Z"></path></svg>
+                        Duplicate
+                    </button>
+                    <button type="button" id="deleteEditClassBtn" class="text-xs bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-1.5 px-3 rounded transition-colors flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0-16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"></path></svg>
+                        Remove Class
+                    </button>
                 </div>
+                <p id="editPanelError" class="text-red-600 text-xs mt-2 hidden font-medium text-center"></p>
             </div>
-            
-            <div class="mt-4 pt-3 border-t border-gray-200 flex justify-between items-center">
-                <button type="button" id="duplicateClassBtn" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-1.5 px-3 rounded transition-colors flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M216,40H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V48A8,8,0,0,0,216,40Zm-56,168H48V96H160Zm48-48H176V96a8,8,0,0,0-8-8H96V56H208Z"></path></svg>
-                    Duplicate
-                </button>
-                <button type="button" id="deleteEditClassBtn" class="text-xs bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-1.5 px-3 rounded transition-colors flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"></path></svg>
-                    Remove Class
-                </button>
-            </div>
-            <p id="editPanelError" class="text-red-600 text-xs mt-2 hidden font-medium text-center"></p>
         </div>
     </div>
 
@@ -777,7 +816,6 @@
     </div>
 
     <script>
-        // Initial dataset
         let scheduleData = [
             { id: 1, subject: 'DEVC 70 ST', room: 'CDC LR1', day: 'Tuesday', start: '08:00', end: '09:00', customClass: null },
             { id: 2, subject: 'DEVC 103 E-2L', room: 'CDC ANNEX2', day: 'Tuesday', start: '10:00', end: '13:00', customClass: null },
@@ -809,6 +847,8 @@
             headers: [], times: []
         };
 
+        let activeEditingId = null;
+
         function generateGridLines() {
             const bgLines = document.getElementById('bgLines');
             const vertLines = document.getElementById('vertLines');
@@ -817,14 +857,12 @@
             bgLines.innerHTML = '';
             vertLines.innerHTML = '';
             
-            // Generate 30 horizontal half-hour lines
             for (let i = 0; i < 30; i++) {
                 const line = document.createElement('div');
                 line.className = 'horizontal-line';
                 bgLines.appendChild(line);
             }
             
-            // Generate 6 vertical day column dividers
             for (let i = 0; i < 6; i++) {
                 const line = document.createElement('div');
                 line.className = 'vertical-line';
@@ -1271,6 +1309,7 @@
                 const wrapper = document.createElement('div');
                 wrapper.className = 'class-block-wrapper';
                 if (highlightId && item.id === highlightId) wrapper.classList.add('just-added');
+                if (activeEditingId && item.id === activeEditingId) wrapper.classList.add('editing-active');
                 
                 const startRow = timeToRowCoord(item.start);
                 const endRow = timeToRowCoord(item.end);
@@ -1288,7 +1327,7 @@
                 grid.appendChild(wrapper);
 
                 const li = document.createElement('li');
-                li.className = 'flex justify-between items-center bg-gray-50 border border-gray-200 p-2 rounded text-sm';
+                li.className = 'flex justify-between items-center bg-gray-50 border border-gray-200 p-2 rounded text-sm cursor-pointer hover:bg-blue-50/50 transition-colors';
                 li.innerHTML = `
                     <div class="overflow-hidden">
                         <div class="font-bold text-gray-800 truncate"></div>
@@ -1302,7 +1341,271 @@
 
                 updateBlockVisuals(item.id);
             });
+            
+            if (activeEditingId) {
+                positionEditPanel();
+            }
         }
+
+        function positionEditPanel() {
+            if (!activeEditingId) return;
+            const targetBlock = document.querySelector(`.class-block-wrapper[data-id="${activeEditingId}"]`);
+            const editPanelCard = document.getElementById('editPanelCard');
+            const panelArrow = document.getElementById('panelArrow');
+            if (!targetBlock || !editPanelCard) return;
+
+            const rect = targetBlock.getBoundingClientRect();
+            const cardWidth = 320; 
+            const cardHeight = editPanelCard.offsetHeight || 380;
+            const margin = 12;
+
+            let left = rect.right + margin;
+            let arrowSide = 'left';
+
+            // Check if placing to the right overflows the screen viewport
+            if (left + cardWidth > window.innerWidth - 16) {
+                // Try placing to the left of the block
+                left = rect.left - cardWidth - margin;
+                arrowSide = 'right';
+
+                // If placing to left also overflows screen (narrow mobile view), center on screen
+                if (left < 16) {
+                    left = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, rect.left));
+                    arrowSide = 'none';
+                }
+            }
+
+            // Calculate vertical position (align with top of block, adjust if offscreen at bottom)
+            let top = rect.top;
+            if (top + cardHeight > window.innerHeight - 16) {
+                top = Math.max(16, window.innerHeight - cardHeight - 16);
+            }
+            if (top < 16) top = 16;
+
+            editPanelCard.style.left = `${left}px`;
+            editPanelCard.style.top = `${top}px`;
+
+            // Adjust arrow graphic position
+            if (panelArrow) {
+                panelArrow.className = 'floating-arrow';
+                if (arrowSide === 'left') {
+                    panelArrow.classList.add('arrow-left');
+                    panelArrow.classList.remove('hidden');
+                    let arrowTop = Math.min(Math.max(16, rect.top - top + 16), cardHeight - 32);
+                    panelArrow.style.top = `${arrowTop}px`;
+                } else if (arrowSide === 'right') {
+                    panelArrow.classList.add('arrow-right');
+                    panelArrow.classList.remove('hidden');
+                    let arrowTop = Math.min(Math.max(16, rect.top - top + 16), cardHeight - 32);
+                    panelArrow.style.top = `${arrowTop}px`;
+                } else {
+                    panelArrow.classList.add('hidden');
+                }
+            }
+        }
+
+        function openEditPanel(id) {
+            const item = scheduleData.find(i => i.id === id);
+            if (!item) return;
+
+            activeEditingId = id;
+
+            // Highlight active block visually
+            document.querySelectorAll('.class-block-wrapper').forEach(el => {
+                if (parseInt(el.getAttribute('data-id')) === id) {
+                    el.classList.add('editing-active');
+                } else {
+                    el.classList.remove('editing-active');
+                }
+            });
+
+            document.getElementById('editingClassLabel').innerText = `Edit: ${item.subject || 'Class Block'}`;
+            document.getElementById('editSubjectName').value = item.subject || '';
+            document.getElementById('editRoomName').value = item.room || '';
+
+            // Set Text Color and Opacity
+            document.getElementById('editTextColor').value = item.textColor || globalSettings.globalClassTextColor;
+            const textOp = item.textOpacity !== undefined ? item.textOpacity : (globalSettings.classTextOpacity ?? 1.0);
+            document.getElementById('editClassTextOpacity').value = Math.round(textOp * 100);
+            document.getElementById('editClassTextOpacityVal').innerText = `${Math.round(textOp * 100)}%`;
+
+            // Set Background settings
+            const bgType = item.bgType || 'default';
+            document.getElementById('editBgType').value = bgType;
+            document.getElementById('editBgColor').value = item.bgColor || globalSettings.classBgColor;
+            const bgOp = item.bgOpacity !== undefined ? item.bgOpacity : (globalSettings.classBgOpacity ?? 1.0);
+            document.getElementById('editClassBgOpacity').value = Math.round(bgOp * 100);
+            document.getElementById('editClassBgOpacityVal').innerText = `${Math.round(bgOp * 100)}%`;
+            document.getElementById('clearEditClassBg').classList.toggle('hidden', !item.customBg);
+
+            // Set Border settings
+            const borderType = item.borderType || 'default';
+            document.getElementById('editBorderType').value = borderType;
+            document.getElementById('editBorderColor').value = item.borderColor || globalSettings.classBorderColor;
+            document.getElementById('clearEditClassBorder').classList.toggle('hidden', !item.customBorder);
+
+            toggleEditPanelContainers();
+
+            const editPanel = document.getElementById('editClassPanel');
+            editPanel.classList.remove('hidden');
+
+            // Position panel next to block
+            requestAnimationFrame(() => {
+                positionEditPanel();
+            });
+        }
+
+        function closeEditPanel() {
+            activeEditingId = null;
+            document.getElementById('editClassPanel').classList.add('hidden');
+            document.querySelectorAll('.class-block-wrapper').forEach(el => el.classList.remove('editing-active'));
+        }
+
+        function toggleEditPanelContainers() {
+            const bgType = document.getElementById('editBgType').value;
+            document.getElementById('editBgColorContainer').classList.toggle('hidden', bgType !== 'color');
+            document.getElementById('editBgImageContainer').classList.toggle('hidden', bgType !== 'image');
+
+            const borderType = document.getElementById('editBorderType').value;
+            document.getElementById('editBorderColorContainer').classList.toggle('hidden', borderType !== 'color');
+            document.getElementById('editBorderImageContainer').classList.toggle('hidden', borderType !== 'image');
+        }
+
+        // Close edit panel on clicking backdrop outside
+        document.getElementById('editPanelBackdrop').addEventListener('click', closeEditPanel);
+        document.getElementById('closeEditPanel').addEventListener('click', closeEditPanel);
+
+        // Auto-reposition panel on window resize or grid scroll
+        window.addEventListener('resize', () => { if (activeEditingId) positionEditPanel(); });
+        document.getElementById('scheduleWrapper').addEventListener('scroll', () => { if (activeEditingId) positionEditPanel(); });
+
+        document.getElementById('editSubjectName').addEventListener('input', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.subject = e.target.value;
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('editRoomName').addEventListener('input', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.room = e.target.value;
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('editTextColor').addEventListener('input', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.textColor = e.target.value;
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('editClassTextOpacity').addEventListener('input', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.textOpacity = e.target.value / 100;
+                document.getElementById('editClassTextOpacityVal').innerText = `${e.target.value}%`;
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('editBgType').addEventListener('change', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.bgType = e.target.value;
+                toggleEditPanelContainers();
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('editBgColor').addEventListener('input', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.bgColor = e.target.value;
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('editClassBgOpacity').addEventListener('input', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.bgOpacity = e.target.value / 100;
+                document.getElementById('editClassBgOpacityVal').innerText = `${e.target.value}%`;
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('editBorderType').addEventListener('change', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.borderType = e.target.value;
+                toggleEditPanelContainers();
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('editBorderColor').addEventListener('input', e => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                item.borderColor = e.target.value;
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        document.getElementById('duplicateClassBtn').addEventListener('click', () => {
+            if (!activeEditingId) return;
+            const source = scheduleData.find(i => i.id === activeEditingId);
+            if (!source) return;
+
+            const durationMins = (timeToRowCoord(source.end) - timeToRowCoord(source.start)) * 30;
+            const slot = findEarliestAvailableSlot(durationMins);
+            if (!slot) {
+                document.getElementById('editPanelError').innerText = "No available slot found to duplicate class.";
+                document.getElementById('editPanelError').classList.remove('hidden');
+                return;
+            }
+
+            const newId = Date.now();
+            const copy = JSON.parse(JSON.stringify(source));
+            copy.id = newId;
+            copy.day = slot.day;
+            copy.start = slot.start;
+            copy.end = slot.end;
+
+            scheduleData.push(copy);
+            renderSchedule(newId);
+            saveData();
+            closeEditPanel();
+        });
+
+        document.getElementById('deleteEditClassBtn').addEventListener('click', () => {
+            if (!activeEditingId) return;
+            scheduleData = scheduleData.filter(i => i.id !== activeEditingId);
+            closeEditPanel();
+            renderSchedule();
+            saveData();
+        });
 
         document.querySelectorAll('.toggle-section-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1322,9 +1625,19 @@
             const btn = e.target.closest('button');
             if (btn && btn.hasAttribute('data-remove-id')) {
                 const id = parseInt(btn.getAttribute('data-remove-id'));
+                if (activeEditingId === id) closeEditPanel();
                 scheduleData = scheduleData.filter(item => item.id !== id);
                 renderSchedule();
                 saveData();
+            } else {
+                const li = e.target.closest('li');
+                if (li) {
+                    const removeBtn = li.querySelector('button[data-remove-id]');
+                    if (removeBtn) {
+                        const id = parseInt(removeBtn.getAttribute('data-remove-id'));
+                        openEditPanel(id);
+                    }
+                }
             }
         });
 
@@ -1717,277 +2030,135 @@
                 
                 const format = isEditingBorder ? 'image/png' : 'image/jpeg';
                 const quality = isEditingBorder ? 1.0 : 0.75;
-                const finalDataUrl = canvas.toDataURL(format, quality);
-                
+                const finalData = canvas.toDataURL(format, quality);
+
+                if (pendingImageCallback) pendingImageCallback(finalData, fit);
                 document.getElementById('imageEditorModal').classList.add('hidden');
-                btn.innerText = 'Apply'; btn.disabled = false;
-                
-                if (pendingImageCallback) pendingImageCallback(finalDataUrl, fit);
+                btn.innerText = 'Apply';
+                btn.disabled = false;
             };
             img.src = pendingImageSrc;
         });
 
-        function setupGlobalImageUpload(inputId, settingsKey, cssVar, isBorder, fitSettingsKey, fitCssVar) {
-            const inputEl = document.getElementById(inputId);
-            if (!inputEl) return;
-            inputEl.addEventListener('change', e => {
-                const file = e.target.files[0];
-                if (file) {
-                    openImageEditor(file, isBorder, (dataUrl, fitVal) => {
-                        globalSettings[settingsKey] = dataUrl;
-                        if (!isBorder) {
-                            document.documentElement.style.setProperty(cssVar, `url(${dataUrl})`);
-                            if (fitSettingsKey) {
-                                globalSettings[fitSettingsKey] = fitVal;
-                                document.documentElement.style.setProperty(fitCssVar, fitVal);
-                                document.documentElement.style.setProperty(fitCssVar + '-repeat', fitVal === 'auto' ? 'repeat' : 'no-repeat');
-                            }
-                        }
-                        const clearBtn = inputEl.nextElementSibling;
-                        if (clearBtn) clearBtn.classList.remove('hidden');
-                        
-                        scheduleData.forEach(item => updateBlockVisuals(item.id));
+        // Image Input handlers for custom block & background images
+        document.getElementById('editClassBgInput').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file && activeEditingId) {
+                openImageEditor(file, false, (imgData, fit) => {
+                    const item = scheduleData.find(i => i.id === activeEditingId);
+                    if (item) {
+                        item.customBg = imgData;
+                        item.customBgFit = fit;
+                        document.getElementById('clearEditClassBg').classList.remove('hidden');
+                        updateBlockVisuals(activeEditingId);
                         saveData();
-                    });
-                }
-                e.target.value = '';
-            });
-
-            const clearBtn = inputEl.nextElementSibling;
-            if (clearBtn) {
-                clearBtn.addEventListener('click', function() {
-                    globalSettings[settingsKey] = null;
-                    if (!isBorder) {
-                        document.documentElement.style.removeProperty(cssVar);
-                        if (fitSettingsKey) {
-                            globalSettings[fitSettingsKey] = 'cover';
-                            document.documentElement.style.setProperty(fitCssVar, 'cover');
-                            document.documentElement.style.setProperty(fitCssVar + '-repeat', 'no-repeat');
-                        }
                     }
-                    inputEl.value = '';
-                    this.classList.add('hidden');
-                    
-                    scheduleData.forEach(item => updateBlockVisuals(item.id));
-                    saveData();
                 });
             }
-        }
-
-        setupGlobalImageUpload('scheduleBgInput', 'scheduleBgImage', '--schedule-bg-image', false, 'scheduleBgFit', '--schedule-bg-size');
-        setupGlobalImageUpload('classBgInput', 'classBgImage', '--class-bg-image', false, 'classBgFit', '--class-bg-size');
-        setupGlobalImageUpload('classBorderInput', 'classBorderImage', '--class-border-image', true);
-
-        let activeEditId = null;
-
-        function openEditPanel(id) {
-            activeEditId = id;
-            const item = scheduleData.find(i => i.id === id);
-            if (!item) return;
-
-            document.getElementById('editSubjectName').value = item.subject;
-            document.getElementById('editRoomName').value = item.room || '';
-            document.getElementById('editingClassLabel').innerText = `Edit: ${item.subject}`;
-
-            document.getElementById('editTextColor').value = item.textColor || globalSettings.globalClassTextColor;
-            const textOp = item.textOpacity !== undefined ? item.textOpacity : 1.0;
-            document.getElementById('editClassTextOpacity').value = Math.round(textOp * 100);
-            document.getElementById('editClassTextOpacityVal').innerText = `${Math.round(textOp * 100)}%`;
-
-            document.getElementById('editBgType').value = item.bgType || 'default';
-            document.getElementById('editBgColor').value = item.bgColor || globalSettings.classBgColor;
-            const bgOp = item.bgOpacity !== undefined ? item.bgOpacity : 1.0;
-            document.getElementById('editClassBgOpacity').value = Math.round(bgOp * 100);
-            document.getElementById('editClassBgOpacityVal').innerText = `${Math.round(bgOp * 100)}%`;
-
-            document.getElementById('editBorderType').value = item.borderType || 'default';
-            document.getElementById('editBorderColor').value = item.borderColor || globalSettings.classBorderColor;
-
-            toggleEditPanelContainers();
-
-            const editPanel = document.getElementById('editClassPanel');
-            editPanel.classList.remove('hidden');
-        }
-
-        function toggleEditPanelContainers() {
-            const bgType = document.getElementById('editBgType').value;
-            document.getElementById('editBgColorContainer').classList.toggle('hidden', bgType !== 'color');
-            document.getElementById('editBgImageContainer').classList.toggle('hidden', bgType !== 'image');
-
-            const borderType = document.getElementById('editBorderType').value;
-            document.getElementById('editBorderColorContainer').classList.toggle('hidden', borderType !== 'color');
-            document.getElementById('editBorderImageContainer').classList.toggle('hidden', borderType !== 'image');
-        }
-
-        document.getElementById('closeEditPanel').addEventListener('click', () => {
-            document.getElementById('editClassPanel').classList.add('hidden');
-            activeEditId = null;
         });
 
-        document.getElementById('editSubjectName').addEventListener('input', e => {
-            if (!activeEditId) return;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.subject = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('editRoomName').addEventListener('input', e => {
-            if (!activeEditId) return;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.room = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('editBgType').addEventListener('change', e => {
-            if (!activeEditId) return;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.bgType = e.target.value; toggleEditPanelContainers(); updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('editBgColor').addEventListener('input', e => {
-            if (!activeEditId) return;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.bgColor = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('editClassBgOpacity').addEventListener('input', e => {
-            if (!activeEditId) return;
-            const opacity = e.target.value / 100;
-            document.getElementById('editClassBgOpacityVal').innerText = `${e.target.value}%`;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.bgOpacity = opacity; updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('editBorderType').addEventListener('change', e => {
-            if (!activeEditId) return;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.borderType = e.target.value; toggleEditPanelContainers(); updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('editBorderColor').addEventListener('input', e => {
-            if (!activeEditId) return;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.borderColor = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('editTextColor').addEventListener('input', e => {
-            if (!activeEditId) return;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.textColor = e.target.value; updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('editClassTextOpacity').addEventListener('input', e => {
-            if (!activeEditId) return;
-            const opacity = e.target.value / 100;
-            document.getElementById('editClassTextOpacityVal').innerText = `${e.target.value}%`;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (item) { item.textOpacity = opacity; updateBlockVisuals(activeEditId); saveData(); }
-        });
-
-        document.getElementById('duplicateClassBtn').addEventListener('click', () => {
-            if (!activeEditId) return;
-            const item = scheduleData.find(i => i.id === activeEditId);
-            if (!item) return;
-
-            const durationMins = (timeToRowCoord(item.end) - timeToRowCoord(item.start)) * 30;
-            const availableSlot = findEarliestAvailableSlot(durationMins);
-
-            if (!availableSlot) {
-                const err = document.getElementById('editPanelError');
-                err.innerText = "No available time slot found to place duplicate!";
-                err.classList.remove('hidden');
-                setTimeout(() => err.classList.add('hidden'), 3000);
-                return;
+        document.getElementById('clearEditClassBg').addEventListener('click', () => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                delete item.customBg;
+                delete item.customBgFit;
+                document.getElementById('editClassBgInput').value = '';
+                document.getElementById('clearEditClassBg').classList.add('hidden');
+                updateBlockVisuals(activeEditingId);
+                saveData();
             }
-
-            const newItem = JSON.parse(JSON.stringify(item));
-            newItem.id = Date.now();
-            newItem.day = availableSlot.day;
-            newItem.start = availableSlot.start;
-            newItem.end = availableSlot.end;
-
-            scheduleData.push(newItem);
-            renderSchedule(newItem.id);
-            saveData();
-            document.getElementById('editClassPanel').classList.add('hidden');
-            activeEditId = null;
         });
 
-        document.getElementById('deleteEditClassBtn').addEventListener('click', () => {
-            if (!activeEditId) return;
-            scheduleData = scheduleData.filter(i => i.id !== activeEditId);
-            renderSchedule();
-            saveData();
-            document.getElementById('editClassPanel').classList.add('hidden');
-            activeEditId = null;
+        document.getElementById('editClassBorderInput').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file && activeEditingId) {
+                openImageEditor(file, true, (imgData) => {
+                    const item = scheduleData.find(i => i.id === activeEditingId);
+                    if (item) {
+                        item.customBorder = imgData;
+                        document.getElementById('clearEditClassBorder').classList.remove('hidden');
+                        updateBlockVisuals(activeEditingId);
+                        saveData();
+                    }
+                });
+            }
         });
 
+        document.getElementById('clearEditClassBorder').addEventListener('click', () => {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (item) {
+                delete item.customBorder;
+                document.getElementById('editClassBorderInput').value = '';
+                document.getElementById('clearEditClassBorder').classList.add('hidden');
+                updateBlockVisuals(activeEditingId);
+                saveData();
+            }
+        });
+
+        // Export JSON file
         document.getElementById('exportBtn').addEventListener('click', () => {
-            const dataToSave = {
-                scheduleData,
-                globalSettings
-            };
-            const jsonString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToSave, null, 2));
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ scheduleData, globalSettings }, null, 2));
             const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", jsonString);
-            downloadAnchor.setAttribute("download", `class_schedule_${new Date().toISOString().slice(0,10)}.json`);
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `class_schedule_${new Date().toISOString().slice(0, 10)}.json`);
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
         });
 
-        document.getElementById('importInput').addEventListener('change', (e) => {
+        // Import JSON file
+        document.getElementById('importInput').addEventListener('change', e => {
             const file = e.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
-            reader.onload = (evt) => {
+            reader.onload = evt => {
                 try {
                     const parsed = JSON.parse(evt.target.result);
-                    if (parsed.scheduleData) {
-                        scheduleData = parsed.scheduleData;
-                        if (parsed.globalSettings) {
-                            globalSettings = { ...globalSettings, ...parsed.globalSettings };
-                            applyGlobalSettings();
-                        }
-                        renderSchedule();
-                        saveData();
+                    if (parsed.scheduleData) scheduleData = parsed.scheduleData;
+                    if (parsed.globalSettings) {
+                        globalSettings = { ...globalSettings, ...parsed.globalSettings };
+                        applyGlobalSettings();
                     }
+                    renderSchedule();
+                    saveData();
                 } catch (err) {
-                    alert("Invalid JSON file format.");
+                    alert("Invalid JSON schedule file.");
                 }
             };
             reader.readAsText(file);
-            e.target.value = '';
         });
 
+        // Export as PNG Image
         document.getElementById('exportPngBtn').addEventListener('click', () => {
-            const node = document.getElementById('scheduleWrapper');
-            const btn = document.getElementById('exportPngBtn');
-            const originalText = btn.innerText;
-            btn.innerText = "Generating PNG...";
-            btn.disabled = true;
+            const gridEl = document.getElementById('gridContainer');
+            if (!gridEl) return;
+            const originalBtn = document.getElementById('exportPngBtn');
+            originalBtn.innerText = "Generating PNG Image...";
+            originalBtn.disabled = true;
 
-            htmlToImage.toPng(node, { quality: 0.95, pixelRatio: 2 })
+            htmlToImage.toPng(gridEl, { quality: 0.95 })
                 .then(dataUrl => {
                     const link = document.createElement('a');
-                    link.download = `schedule_${new Date().toISOString().slice(0,10)}.png`;
+                    link.download = `schedule_${new Date().toISOString().slice(0, 10)}.png`;
                     link.href = dataUrl;
                     link.click();
-                    btn.innerText = originalText;
-                    btn.disabled = false;
                 })
                 .catch(err => {
-                    console.error("Export error:", err);
-                    alert("Failed to export image. Please try again.");
-                    btn.innerText = originalText;
-                    btn.disabled = false;
+                    console.error("PNG export error:", err);
+                })
+                .finally(() => {
+                    originalBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> Export as PNG Image`;
+                    originalBtn.disabled = false;
                 });
         });
 
-        window.addEventListener('DOMContentLoaded', () => {
+        window.onload = function() {
             generateGridLines();
             applyGlobalSettings();
             renderSchedule();
-        });
+        };
     </script>
 </body>
 </html>
