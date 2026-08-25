@@ -23,6 +23,9 @@
             background-color: #f3f4f6;
             margin: 0;
             padding: 20px;
+            height: 100vh; /* Added to lock screen height */
+            box-sizing: border-box; /* Added to keep padding inside the 100vh */
+            overflow: hidden; /* Added to prevent the whole page from scrolling */
         }
 
         .main-layout {
@@ -31,34 +34,20 @@
             gap: 20px;
             max-width: 1350px;
             margin: 0 auto;
+            height: 100%; /* Added to fill the locked body height */
         }
 
         @media (min-width: 1024px) {
             .main-layout {
                 flex-direction: row;
-                align-items: flex-start;
+                align-items: stretch; /* Changed from flex-start to fill the height */
             }
-        }
-
-        .controls-panel {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            min-width: 300px;
-            transition: width 0.3s ease, min-width 0.3s ease;
-        }
-
-        .controls-panel.collapsed {
-            min-width: 0;
-        }
-
-        @media (min-width: 1024px) {
+            
             .controls-panel {
                 width: 360px;
-                position: sticky;
-                top: 20px;
+                height: 100%; /* Make panel take full layout height */
+                overflow-y: auto; /* Allow the panel to scroll vertically */
+                /* Removed position: sticky and top: 20px */
             }
             
             .controls-panel.collapsed {
@@ -93,13 +82,14 @@
             font-family: var(--main-font);
             flex-grow: 1;
             width: 100%;
+            height: 100%; /* Added to restrict height for scrolling */
             background-color: var(--grid-bg);
             background-image: var(--schedule-bg-image, none);
             background-size: var(--schedule-bg-size, cover);
             background-repeat: var(--schedule-bg-repeat, no-repeat);
             background-position: center;
             border: 1px solid #ccc;
-            overflow-x: auto;
+            overflow: auto; /* Changed from overflow-x: auto to allow both vertical and horizontal scroll */
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
         }
