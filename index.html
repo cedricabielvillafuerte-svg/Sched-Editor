@@ -1053,76 +1053,87 @@
                 const dayColW = (img.width - timeColW) / 6;
     
                 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                const extractedClasses = [];
+                const extractedBlocks = [];
+    
+                // Helper: 3x3 Multi-Point Cell Sampling to ignore text pixels
+                function isCellFilled(colX, rowY, w, h) {
+                    let greenCount = 0;
+                    const sampleRatios = [0.25, 0.5, 0.75];
+                    for (const sx of sampleRatios) {
+                        for (const sy of sampleRatios) {
+                            const px = Math.round(colX + w * sx);
+                            const py = Math.round(rowY + h * sy);
+                            const pixel = ctx.getImageData(px, py, 1, 1).data;
+                            const r = pixel[0], g = pixel[1], b = pixel[2];
+                            
+                            // Dark green block profile
+                            const isDarkGreen = (g > r + 10) && (g > b) && (g < 170) && (r < 130);
+                            if (isDarkGreen) greenCount++;
+                        }
+                    }
+                    return greenCount >= 3;
+                }
     
                 statusLabel.innerText = "Detecting Schedule Blocks...";
     
                 for (let col = 0; col < 6; col++) {
-                    let currentClass = null;
+                    let currentBlock = null;
     
                     for (let row = 0; row < 30; row++) {
-                        const centerX = timeColW + (col * dayColW) + (dayColW / 2);
-                        const centerY = headerH + (row * rowH) + (rowH / 2);
+                        const cellX = timeColW + (col * dayColW);
+                        const cellY = headerH + (row * rowH);
     
-                        const pixel = ctx.getImageData(Math.round(centerX), Math.round(centerY), 1, 1).data;
-                        const r = pixel[0], g = pixel[1], b = pixel[2];
+                        const filled = isCellFilled(cellX, cellY, dayColW, rowH);
     
-                        // Strictly detect dark green class blocks
-                        const isFilled = (g > r + 15) && (g > b) && (r < 120) && (g < 160);
-    
-                        if (isFilled) {
-                            if (!currentClass) {
-                                currentClass = {
+                        if (filled) {
+                            if (!currentBlock) {
+                                currentBlock = {
                                     day: days[col],
                                     startRow: row,
                                     endRow: row + 1,
-                                    pixelX: timeColW + (col * dayColW),
-                                    pixelY: headerH + (row * rowH)
+                                    pixelX: cellX,
+                                    pixelY: cellY
                                 };
                             } else {
-                                currentClass.endRow = row + 1;
+                                currentBlock.endRow = row + 1;
                             }
                         } else {
-                            if (currentClass) {
-                                extractedClasses.push(currentClass);
-                                currentClass = null;
+                            if (currentBlock) {
+                                extractedBlocks.push(currentBlock);
+                                currentBlock = null;
                             }
                         }
                     }
-                    if (currentClass) extractedClasses.push(currentClass); 
+                    if (currentBlock) extractedBlocks.push(currentBlock); 
                 }
     
-                // --- FIX 3: FILTER MINIMUM BLOCK HEIGHT ---
-                // Ignores 1-row micro artifacts (less than 30 mins)
-                const validClasses = extractedClasses.filter(cls => (cls.endRow - cls.startRow) >= 1);
-    
-                if (validClasses.length === 0) {
+                if (extractedBlocks.length === 0) {
                     statusLabel.innerText = "No classes found! Please check image format.";
                     btnLabel.innerHTML = `Upload & Scan Image`;
                     return;
                 }
     
-                statusLabel.innerText = `Found ${validClasses.length} class blocks. Initializing OCR...`;
+                statusLabel.innerText = `Found ${extractedBlocks.length} schedule regions. Initializing OCR...`;
     
-                // --- FIX 1: TESSERACT PSM & WHITELIST ---
                 const worker = await Tesseract.createWorker('eng');
                 await worker.setParameters({
-                    tessedit_pageseg_mode: '6', // Assume single text block per box
+                    tessedit_pageseg_mode: '6', // Read structured lines
                     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -/',
                 });
     
-                for (const [index, cls] of validClasses.entries()) {
-                    statusLabel.innerText = `Extracting Text: ${index + 1} of ${validClasses.length}...`;
+                scheduleData = []; // Reset schedule array
+    
+                for (const [index, block] of extractedBlocks.entries()) {
+                    statusLabel.innerText = `Extracting Text: ${index + 1} of ${extractedBlocks.length}...`;
                     
-                    // --- FIX 2: CROP PADDING & HIGH-CONTRAST BINARIZATION ---
                     const pad = 2;
-                    const safeX = Math.max(0, Math.round(cls.pixelX) - pad);
-                    const safeY = Math.max(0, Math.round(cls.pixelY) - pad);
+                    const safeX = Math.max(0, Math.round(block.pixelX) - pad);
+                    const safeY = Math.max(0, Math.round(block.pixelY) - pad);
                     const boxW = Math.round(dayColW) + (pad * 2);
-                    const boxH = Math.round((cls.endRow - cls.startRow) * rowH) + (pad * 2);
+                    const boxH = Math.round((block.endRow - block.startRow) * rowH) + (pad * 2);
     
                     const tempCanvas = document.createElement('canvas');
-                    const scaleFactor = 3;
+                    const scaleFactor = 3; // 3x upscale for sharp text
                     tempCanvas.width = boxW * scaleFactor;
                     tempCanvas.height = boxH * scaleFactor;
     
@@ -1130,51 +1141,96 @@
                     tCtx.imageSmoothingEnabled = false;
                     tCtx.drawImage(canvas, safeX, safeY, boxW, boxH, 0, 0, tempCanvas.width, tempCanvas.height);
     
+                    // INVERT LUMINANCE: White text on green -> Black text on white background
                     const imgData = tCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
                     const data = imgData.data;
                     for (let i = 0; i < data.length; i += 4) {
-                        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
-                        const value = avg > 140 ? 255 : 0;
-                        data[i] = value;
-                        data[i+1] = value;
-                        data[i+2] = value;
+                        const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                        const val = lum > 140 ? 0 : 255; // High luminance -> Black text, Low -> White BG
+                        data[i] = val;
+                        data[i+1] = val;
+                        data[i+2] = val;
                     }
                     tCtx.putImageData(imgData, 0, 0);
     
-                    const { data: { text } } = await worker.recognize(tempCanvas.toDataURL('image/png'));
+                    const { data: ocrResult } = await worker.recognize(tempCanvas.toDataURL('image/png'));
                     
-                    const lines = text.split('\n')
-                        .map(l => l.replace(/[^a-zA-Z0-9 -/]/g, '').trim())
-                        .filter(l => l.length > 1);
+                    // Regex pattern matching course codes (e.g., DEVC 70, HK 12, WIKA 1, COMM 10)
+                    const isCourseHeader = (str) => /^[A-Z]{2,6}\s*\d+/i.test(str.trim());
     
-                    const coursePattern = /^([A-Z]{2,6}\s*\d+[A-Z0-9\s-]*)/i;
-                    let subject = 'Unknown Subject';
-                    let room = 'Unknown Room';
+                    // Group detected text lines into course subjects
+                    const detectedCourses = [];
+                    let currentCourse = null;
     
-                    if (lines.length > 0) {
-                        subject = lines[0];
-                        if (lines.length > 1) {
-                            room = lines.slice(1).join(' ');
+                    for (const lineObj of ocrResult.lines) {
+                        const lineText = lineObj.text.replace(/[^a-zA-Z0-9 -/]/g, '').trim();
+                        if (lineText.length < 2) continue;
+    
+                        if (isCourseHeader(lineText)) {
+                            if (currentCourse) detectedCourses.push(currentCourse);
+                            currentCourse = {
+                                subject: lineText,
+                                roomLines: [],
+                                y0: lineObj.bbox.y0
+                            };
                         } else {
-                            const match = lines[0].match(coursePattern);
-                            if (match) {
-                                subject = match[0].trim();
-                                room = lines[0].replace(match[0], '').trim() || 'Unknown Room';
+                            if (currentCourse) {
+                                currentCourse.roomLines.push(lineText);
+                            } else {
+                                currentCourse = {
+                                    subject: lineText,
+                                    roomLines: [],
+                                    y0: lineObj.bbox.y0
+                                };
                             }
                         }
                     }
+                    if (currentCourse) detectedCourses.push(currentCourse);
     
-                    scheduleData.push({
-                        id: Date.now() + Math.random(),
-                        subject: subject,
-                        room: room,
-                        day: cls.day,
-                        startRow: cls.startRow,
-                        endRow: cls.endRow,
-                        start: rowCoordToTime(cls.startRow + 2),
-                        end: rowCoordToTime(cls.endRow + 2),
-                        customClass: null
-                    });
+                    // Split merged contiguous blocks into individual classes
+                    if (detectedCourses.length <= 1) {
+                        const single = detectedCourses[0] || { subject: 'Unknown Subject', roomLines: [] };
+                        scheduleData.push({
+                            id: Date.now() + Math.random(),
+                            subject: single.subject,
+                            room: single.roomLines.join(' ') || 'Unknown Room',
+                            day: block.day,
+                            startRow: block.startRow,
+                            endRow: block.endRow,
+                            start: rowCoordToTime(block.startRow),
+                            end: rowCoordToTime(block.endRow),
+                            customClass: null
+                        });
+                    } else {
+                        const totalBlockRows = block.endRow - block.startRow;
+                        for (let c = 0; c < detectedCourses.length; c++) {
+                            const course = detectedCourses[c];
+                            const relRatio = course.y0 / tempCanvas.height;
+                            let subStartRow = block.startRow + Math.round(relRatio * totalBlockRows);
+                            
+                            let subEndRow;
+                            if (c < detectedCourses.length - 1) {
+                                const nextRelRatio = detectedCourses[c + 1].y0 / tempCanvas.height;
+                                subEndRow = block.startRow + Math.round(nextRelRatio * totalBlockRows);
+                            } else {
+                                subEndRow = block.endRow;
+                            }
+    
+                            if (subStartRow >= subEndRow) subStartRow = Math.max(block.startRow, subEndRow - 1);
+    
+                            scheduleData.push({
+                                id: Date.now() + Math.random(),
+                                subject: course.subject,
+                                room: course.roomLines.join(' ') || 'Unknown Room',
+                                day: block.day,
+                                startRow: subStartRow,
+                                endRow: subEndRow,
+                                start: rowCoordToTime(subStartRow),
+                                end: rowCoordToTime(subEndRow),
+                                customClass: null
+                            });
+                        }
+                    }
                 }
     
                 await worker.terminate();
