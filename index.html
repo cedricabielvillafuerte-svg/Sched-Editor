@@ -711,8 +711,18 @@
                     
                     <label class="block text-xs text-gray-600 mb-1">Room / Location</label>
                     <input type="text" id="editRoomName" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none mb-2 bg-white">
-                </div>
-
+                </div>  
+                                        <div class="grid grid-cols-2 gap-2 mt-2">
+                                            <div>
+                                                <label class="block text-xs text-gray-600 mb-1">Start Time</label>
+                                                <input type="time" id="editStartTime" min="07:00" max="21:30" step="1800" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs text-gray-600 mb-1">End Time</label>
+                                                <input type="time" id="editEndTime" min="07:30" max="22:00" step="1800" class="w-full border rounded px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                            </div>
+                                        </div>
+                                    </div>
                 <div class="mb-3">
                     <label class="block text-xs text-gray-600 mb-1">Text Color (This Class Only)</label>
                     <div class="flex items-center gap-3 bg-gray-50 border border-gray-300 rounded p-1.5 mb-3 shadow-sm">
@@ -1487,6 +1497,8 @@
             document.getElementById('editingClassLabel').innerText = `Edit: ${item.subject || 'Class Block'}`;
             document.getElementById('editSubjectName').value = item.subject || '';
             document.getElementById('editRoomName').value = item.room || '';
+            document.getElementById('editStartTime').value = item.start || '';
+            document.getElementById('editEndTime').value = item.end || '';
 
             // Set Text Color and Opacity
             document.getElementById('editTextColor').value = item.textColor || globalSettings.globalClassTextColor;
@@ -1563,6 +1575,32 @@
                 saveData();
             }
         });
+
+        function handleEditTimeChange() {
+            if (!activeEditingId) return;
+            const item = scheduleData.find(i => i.id === activeEditingId);
+            if (!item) return;
+
+            const newStart = document.getElementById('editStartTime').value;
+            const newEnd = document.getElementById('editEndTime').value;
+            const errorEl = document.getElementById('editPanelError');
+
+            if (newStart && newEnd && newStart < newEnd) {
+                item.start = newStart;
+                item.end = newEnd;
+                errorEl.classList.add('hidden');
+                
+                // Re-render the entire schedule to update grid positions and height
+                renderSchedule(); 
+                saveData();
+            } else {
+                errorEl.innerText = "End time must be after start time.";
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('editStartTime').addEventListener('change', handleEditTimeChange);
+        document.getElementById('editEndTime').addEventListener('change', handleEditTimeChange);
 
         document.getElementById('editTextColor').addEventListener('input', e => {
             if (!activeEditingId) return;
