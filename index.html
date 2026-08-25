@@ -1022,7 +1022,7 @@
         // ----------------------------------------------------------------------
         // UPGRADED OCR AUTOMATED IMAGE SCANNING LOGIC 
         // ----------------------------------------------------------------------
-        document.getElementById('ocrImageInput').addEventListener('change', async (e) => {
+       document.getElementById('ocrImageInput').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
     
@@ -1044,7 +1044,7 @@
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
     
-                // Proportional Grid Dimensions (Header = 32px, Body = 720px, Total = 752px)
+                // Proportional Grid Dimensions
                 const headerH = img.height * (32 / 752);
                 const bodyH = img.height - headerH;
                 const rowH = bodyH / 30;
@@ -1055,7 +1055,7 @@
                 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                 const extractedClasses = [];
     
-                statusLabel.innerText = "Processing Pixel Grid for Classes...";
+                statusLabel.innerText = "Detecting Schedule Blocks...";
     
                 for (let col = 0; col < 6; col++) {
                     let currentClass = null;
@@ -1067,7 +1067,7 @@
                         const pixel = ctx.getImageData(Math.round(centerX), Math.round(centerY), 1, 1).data;
                         const r = pixel[0], g = pixel[1], b = pixel[2];
     
-                        // Strictly detect dark green class blocks (ignores brown header and light grid background)
+                        // Strictly detect dark green class blocks
                         const isFilled = (g > r + 15) && (g > b) && (r < 120) && (g < 160);
     
                         if (isFilled) {
@@ -1092,55 +1092,85 @@
                     if (currentClass) extractedClasses.push(currentClass); 
                 }
     
-                if (extractedClasses.length === 0) {
+                // --- FIX 3: FILTER MINIMUM BLOCK HEIGHT ---
+                // Ignores 1-row micro artifacts (less than 30 mins)
+                const validClasses = extractedClasses.filter(cls => (cls.endRow - cls.startRow) >= 1);
+    
+                if (validClasses.length === 0) {
                     statusLabel.innerText = "No classes found! Please check image format.";
                     btnLabel.innerHTML = `Upload & Scan Image`;
                     return;
                 }
     
-                statusLabel.innerText = `Found ${extractedClasses.length} class blocks. Initializing OCR...`;
-                const worker = await Tesseract.createWorker('eng');
+                statusLabel.innerText = `Found ${validClasses.length} class blocks. Initializing OCR...`;
     
-                for (const [index, cls] of extractedClasses.entries()) {
-                    statusLabel.innerText = `Extracting Text: ${index + 1} of ${extractedClasses.length}...`;
+                // --- FIX 1: TESSERACT PSM & WHITELIST ---
+                const worker = await Tesseract.createWorker('eng');
+                await worker.setParameters({
+                    tessedit_pageseg_mode: '6', // Assume single text block per box
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -/',
+                });
+    
+                for (const [index, cls] of validClasses.entries()) {
+                    statusLabel.innerText = `Extracting Text: ${index + 1} of ${validClasses.length}...`;
                     
-                    const boxW = Math.max(1, Math.round(dayColW));
-                    const boxH = Math.max(1, Math.round((cls.endRow - cls.startRow) * rowH));
-                    const safeX = Math.round(cls.pixelX);
-                    const safeY = Math.round(cls.pixelY);
+                    // --- FIX 2: CROP PADDING & HIGH-CONTRAST BINARIZATION ---
+                    const pad = 2;
+                    const safeX = Math.max(0, Math.round(cls.pixelX) - pad);
+                    const safeY = Math.max(0, Math.round(cls.pixelY) - pad);
+                    const boxW = Math.round(dayColW) + (pad * 2);
+                    const boxH = Math.round((cls.endRow - cls.startRow) * rowH) + (pad * 2);
     
                     const tempCanvas = document.createElement('canvas');
                     const scaleFactor = 3;
                     tempCanvas.width = boxW * scaleFactor;
                     tempCanvas.height = boxH * scaleFactor;
+    
                     const tCtx = tempCanvas.getContext('2d');
+                    tCtx.imageSmoothingEnabled = false;
                     tCtx.drawImage(canvas, safeX, safeY, boxW, boxH, 0, 0, tempCanvas.width, tempCanvas.height);
     
-                    // Preserve font anti-aliasing with relative luminance thresholding
                     const imgData = tCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
                     const data = imgData.data;
                     for (let i = 0; i < data.length; i += 4) {
-                        const lum = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-                        if (lum > 120) {
-                            data[i] = 0; data[i+1] = 0; data[i+2] = 0; // Text -> Black
-                        } else {
-                            data[i] = 255; data[i+1] = 255; data[i+2] = 255; // Background -> White
-                        }
+                        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+                        const value = avg > 140 ? 255 : 0;
+                        data[i] = value;
+                        data[i+1] = value;
+                        data[i+2] = value;
                     }
                     tCtx.putImageData(imgData, 0, 0);
     
-                    const blockDataUrl = tempCanvas.toDataURL('image/png');
-                    const { data: { text } } = await worker.recognize(blockDataUrl);
+                    const { data: { text } } = await worker.recognize(tempCanvas.toDataURL('image/png'));
                     
-                    const cleanLines = text.split('\n')
-                        .map(l => l.replace(/[^a-zA-Z0-9 -]/g, '').trim())
-                        .filter(l => l.length >= 2);
+                    const lines = text.split('\n')
+                        .map(l => l.replace(/[^a-zA-Z0-9 -/]/g, '').trim())
+                        .filter(l => l.length > 1);
+    
+                    const coursePattern = /^([A-Z]{2,6}\s*\d+[A-Z0-9\s-]*)/i;
+                    let subject = 'Unknown Subject';
+                    let room = 'Unknown Room';
+    
+                    if (lines.length > 0) {
+                        subject = lines[0];
+                        if (lines.length > 1) {
+                            room = lines.slice(1).join(' ');
+                        } else {
+                            const match = lines[0].match(coursePattern);
+                            if (match) {
+                                subject = match[0].trim();
+                                room = lines[0].replace(match[0], '').trim() || 'Unknown Room';
+                            }
+                        }
+                    }
     
                     scheduleData.push({
                         id: Date.now() + Math.random(),
-                        subject: cleanLines[0] || 'Unknown Subject',
-                        room: cleanLines.slice(1).join(' ') || 'Unknown Room',
+                        subject: subject,
+                        room: room,
                         day: cls.day,
+                        startRow: cls.startRow,
+                        endRow: cls.endRow,
                         start: rowCoordToTime(cls.startRow + 2),
                         end: rowCoordToTime(cls.endRow + 2),
                         customClass: null
